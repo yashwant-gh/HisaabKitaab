@@ -385,17 +385,23 @@ app.post('/api/groups/:id/invite', authenticateToken, async (req, res) => {
       const groupDetails = await db.query(`SELECT name FROM groups WHERE id = ?`, [groupId]);
       const groupName = groupDetails[0] ? groupDetails[0].name : 'a group';
       
+      const protocol = req.secure ? 'https' : 'http';
+      const appUrl = `${protocol}://${req.headers.host}`;
+
       const mailOptions = {
         from: `"Hisaab Kitaab" <${process.env.SMTP_USER || 'no-reply@hisaab.com'}>`,
         to: email,
         subject: `Invitation to join group "${groupName}" on Hisaab Kitaab`,
-        text: `Hello,\n\n${req.user.name} has invited you to join their expense sharing group "${groupName}" on Hisaab Kitaab.\n\nSign in or register with this email to accept the invitation and start sharing expenses!\n\nBest regards,\nThe Hisaab Kitaab Team`,
+        text: `Hello,\n\n${req.user.name} has invited you to join their expense sharing group "${groupName}" on Hisaab Kitaab.\n\nSign in or register with this email to accept the invitation and start sharing expenses at: ${appUrl}\n\nBest regards,\nThe Hisaab Kitaab Team`,
         html: `
           <div style="font-family: 'Nunito', sans-serif; padding: 20px; border: 1px solid #edf2f7; border-radius: 12px; max-width: 500px; margin: 0 auto; background-color: #f7fafc;">
             <h2 style="color: #5d5bf6; font-family: 'Fredoka', sans-serif; text-align: center; margin-bottom: 20px;">💸 Hisaab Kitaab</h2>
             <p style="font-size: 1rem; color: #2b2d42;">Hello,</p>
             <p style="font-size: 1rem; color: #2b2d42;"><strong>${req.user.name}</strong> has invited you to join their expense-splitting group <strong>"${groupName}"</strong> on Hisaab Kitaab.</p>
-            <p style="font-size: 1rem; color: #2b2d42;">Log in or create an account with this email address to accept the invitation and start splitting bills!</p>
+            <p style="text-align: center; margin: 30px 0;">
+              <a href="${appUrl}" style="background-color: #5d5bf6; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: bold; font-family: 'Fredoka', sans-serif; display: inline-block; box-shadow: 0 4px 10px rgba(93, 91, 246, 0.25);">Go to Hisaab Kitaab & Accept</a>
+            </p>
+            <p style="font-size: 1.0rem; color: #2b2d42;">Log in or create an account with this email address to accept the invitation and start splitting bills!</p>
             <hr style="border: 0; border-top: 1px solid #edf2f7; margin: 20px 0;">
             <p style="font-size: 0.8rem; color: #a0aec0; text-align: center;">Hisaab Kitaab App — Splitting expenses made easy, clean, and playful!</p>
           </div>
