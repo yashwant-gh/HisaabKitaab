@@ -145,6 +145,7 @@
         <button id="nav-btn-add" class="tab-btn" onclick="switchTab('add')">➕ Add Expense</button>
         <button id="nav-btn-import" class="tab-btn" onclick="switchTab('import')">📥 Import CSV</button>
         <button id="nav-btn-members" class="tab-btn" onclick="switchTab('members')">👥 Group Members</button>
+        <button id="nav-btn-profile" class="tab-btn" onclick="switchTab('profile')">👤 My Profile</button>
       </nav>
 
       <!-- CONTENT PANELS -->
@@ -458,6 +459,45 @@
             <div class="members-grid-container" id="members-list-grid">
               <!-- JS Generated Members grid -->
             </div>
+          </div>
+        </section>
+
+        <!-- PROFILE TAB -->
+        <section id="panel-profile" class="tab-content hidden">
+          <div class="dashboard-card max-width-600">
+            <h3>👤 My Profile & Settings</h3>
+            
+            <div class="profile-details-card mt-3">
+              <div class="profile-avatar-container" style="text-align: center;">
+                <img id="profile-page-avatar" src="" alt="Avatar" class="avatar-huge" style="width: 100px; height: 100px; border-radius: 50%; border: 3px solid var(--primary-color);">
+              </div>
+              <h4 id="profile-page-name" style="text-align: center; margin-top: 10px; font-family: 'Fredoka', sans-serif;">User Name</h4>
+              <p id="profile-page-email" style="text-align: center; color: var(--text-muted); font-size: 0.9rem;">email@hisaab.com</p>
+            </div>
+
+            <!-- Create New Group Section -->
+            <hr class="my-4">
+            <h4>🏠 Create a New Group</h4>
+            <p class="help-text">Start a new shared expense space and invite your friends.</p>
+            <div class="form-group mt-2">
+              <label for="profile-new-group-name">Group Name</label>
+              <input type="text" id="profile-new-group-name" placeholder="e.g. Goa Trip 2026, Weekend Outing">
+              <label for="profile-new-group-desc" class="mt-2">Description (Optional)</label>
+              <textarea id="profile-new-group-desc" placeholder="e.g. Splitting costs for the weekend trip"></textarea>
+              <button class="btn btn-primary w-100 mt-3" onclick="createGroupFromProfile()">Create Group</button>
+            </div>
+
+            <!-- Group Management Section -->
+            <hr class="my-4">
+            <h4>🚪 Exit Current Group</h4>
+            <p class="help-text">You will be removed from the active group. You won't see its expenses anymore unless invited back.</p>
+            <button class="btn btn-warning w-100 mt-2" onclick="exitActiveGroup()">Exit Active Group ("<span id="active-group-exit-name"></span>")</button>
+
+            <!-- Danger Zone Section -->
+            <hr class="my-4">
+            <h4 style="color: var(--error-color);">⚠️ Danger Zone</h4>
+            <p class="help-text">Permanently delete your entire Hisaab Kitaab account. This action cannot be undone.</p>
+            <button class="btn btn-danger w-100 mt-2" onclick="deleteUserAccount()">Delete Entire Account</button>
           </div>
         </section>
 

@@ -431,17 +431,117 @@ function logout() {
   showAuthScreen();
 }
 
+// --- PROFILE SETTINGS & GROUP MANAGEMENT ---
+function populateProfileTab() {
+  if (!currentUser) return;
+  document.getElementById('profile-page-avatar').src = currentUser.avatar_url;
+  document.getElementById('profile-page-name').innerText = currentUser.name;
+  document.getElementById('profile-page-email').innerText = currentUser.email;
+  
+  const activeGroup = groupsList.find(g => g.id === currentGroupId);
+  const exitNameLabel = document.getElementById('active-group-exit-name');
+  if (exitNameLabel) {
+    exitNameLabel.innerText = activeGroup ? activeGroup.name : 'None';
+  }
+}
+
+async function createGroupFromProfile() {
+  const name = document.getElementById('profile-new-group-name').value.trim();
+  const desc = document.getElementById('profile-new-group-desc').value.trim();
+  if (!name) return alert('Please enter a group name');
+  
+  try {
+    const res = await fetch(`${API_BASE}/api/groups`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ name, description: desc })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      alert(data.message);
+      document.getElementById('profile-new-group-name').value = '';
+      document.getElementById('profile-new-group-desc').value = '';
+      currentGroupId = data.groupId;
+      loadGroups();
+      switchTab('dashboard');
+    } else {
+      alert(data.error || 'Failed to create group');
+    }
+  } catch (err) {
+    alert('Error creating group');
+  }
+}
+
+async function exitActiveGroup() {
+  if (!currentUser) return;
+  if (!currentGroupId || groupsList.length === 0) {
+    return alert('You are not in any group!');
+  }
+  const activeGroup = groupsList.find(g => g.id === currentGroupId);
+  const groupName = activeGroup ? activeGroup.name : 'this group';
+  if (!confirm(`Are you sure you want to exit the group "${groupName}"? You will lose access to its expenses.`)) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/groups/${currentGroupId}/exit`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    const data = await res.json();
+    if (res.ok) {
+      alert(data.message || 'You have successfully exited the group.');
+      loadGroups();
+      switchTab('dashboard');
+    } else {
+      alert(data.error || 'Failed to exit group');
+    }
+  } catch (err) {
+    alert('Error exiting group');
+  }
+}
+
+async function deleteUserAccount() {
+  if (!currentUser) return;
+  if (!confirm('🚨 WARNING: Are you sure you want to permanently delete your entire account? This will delete your profile credentials, remove you from all groups, and log you out. This action CANNOT be undone.')) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/delete-account`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    const data = await res.json();
+    if (res.ok) {
+      alert(data.message || 'Your account has been successfully deleted.');
+      logout();
+    } else {
+      alert(data.error || 'Failed to delete account');
+    }
+  } catch (err) {
+    alert('Error deleting account');
+  }
+}
+
 // --- NAVIGATION ---
 function switchTab(tabId) {
   activeTab = tabId;
-  const tabs = ['dashboard', 'expenses', 'add', 'import', 'members'];
+  const tabs = ['dashboard', 'expenses', 'add', 'import', 'members', 'profile'];
   tabs.forEach(t => {
-    document.getElementById(`panel-${t}`).classList.toggle('hidden', t !== tabId);
-    document.getElementById(`nav-btn-${t}`).classList.toggle('active', t === tabId);
+    const panel = document.getElementById(`panel-${t}`);
+    const btn = document.getElementById(`nav-btn-${t}`);
+    if (panel) panel.classList.toggle('hidden', t !== tabId);
+    if (btn) btn.classList.toggle('active', t === tabId);
   });
   
   if (tabId === 'add') {
     resetExpenseForm();
+  } else if (tabId === 'profile') {
+    populateProfileTab();
   }
 }
 

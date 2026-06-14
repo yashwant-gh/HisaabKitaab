@@ -239,6 +239,25 @@ app.get('/api/auth/me', authenticateToken, (req, res) => {
   res.json({ user: req.user });
 });
 
+// Delete Account
+app.delete('/api/auth/delete-account', authenticateToken, async (req, res) => {
+  try {
+    await db.run('BEGIN TRANSACTION');
+    // Remove user
+    await db.run(`DELETE FROM users WHERE id = ?`, [req.user.id]);
+    // Remove from group memberships
+    await db.run(`DELETE FROM group_members WHERE user_name = ?`, [req.user.name]);
+    // Remove pending invitations
+    await db.run(`DELETE FROM group_invitations WHERE invitee_email = ? AND status = 'pending'`, [req.user.email]);
+    await db.run('COMMIT');
+    res.json({ message: 'Your account has been deleted successfully.' });
+  } catch (err) {
+    await db.run('ROLLBACK');
+    console.error(err);
+    res.status(500).json({ error: 'Failed to delete account' });
+  }
+});
+
 // ==========================================
 // GROUP MANAGEMENT
 // ==========================================
@@ -437,6 +456,31 @@ app.get('/api/groups/:id', authenticateToken, async (req, res) => {
     res.json({ ...group[0], members });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch group details' });
+  }
+});
+
+// Exit active group
+app.post('/api/groups/:groupId/exit', authenticateToken, async (req, res) => {
+  const groupId = req.params.groupId;
+  try {
+    // Check if member
+    const memberships = await db.query(
+      `SELECT * FROM group_members WHERE group_id = ? AND user_name = ?`,
+      [groupId, req.user.name]
+    );
+    if (memberships.length === 0) {
+      return res.status(400).json({ error: 'You are not a member of this group' });
+    }
+    
+    // Remove membership
+    await db.run(
+      `DELETE FROM group_members WHERE group_id = ? AND user_name = ?`,
+      [groupId, req.user.name]
+    );
+    res.json({ message: 'You have exited the group successfully.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to exit group' });
   }
 });
 
