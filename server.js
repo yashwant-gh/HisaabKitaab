@@ -185,11 +185,13 @@ app.post('/api/auth/signup-complete', async (req, res) => {
     if (existingUser.length > 0) {
       // If a placeholder user (seeded by name) exists, update their record
       const user = existingUser[0];
-      if (user.password_hash === null && user.email === email) {
+      const isPlaceholder = user.email && user.email.endsWith('@hisaab.com');
+      
+      if (isPlaceholder || user.password_hash === null) {
         const hash = await bcrypt.hash(password, 10);
-        await db.run(`UPDATE users SET password_hash = ? WHERE id = ?`, [hash, user.id]);
-        const token = jwt.sign({ id: user.id, name: user.name, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
-        return res.json({ token, user: { id: user.id, name: user.name, email: user.email, avatar_url: user.avatar_url } });
+        await db.run(`UPDATE users SET email = ?, password_hash = ? WHERE id = ?`, [email, hash, user.id]);
+        const token = jwt.sign({ id: user.id, name: user.name, email: email }, JWT_SECRET, { expiresIn: '7d' });
+        return res.json({ token, user: { id: user.id, name: user.name, email: email, avatar_url: user.avatar_url } });
       }
       return res.status(400).json({ error: 'User with this email or name already exists' });
     }
