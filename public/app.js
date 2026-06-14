@@ -929,76 +929,185 @@ function renderAuditTrail() {
 
 // --- GRAPHING ---
 function renderChart() {
+  if (!currentUser) return;
   const ctx = document.getElementById('monthlyChart').getContext('2d');
-  
-  // Aggregate expenses by month
+
+  // Aggregate MY personal share per month (only expenses I'm a participant in)
   const monthlyTotals = {};
-  
+
   expensesList.forEach(exp => {
-    if (exp.is_settlement) return; // skip settlements for expense chart
-    
+    if (exp.is_settlement) return; // skip settlements
     const date = new Date(exp.date);
     if (isNaN(date.getTime())) return;
-    
-    const monthYear = date.toLocaleString('default', { month: 'long', year: 'numeric' });
-    const inrValue = exp.amount * (exp.exchange_rate || 1.0);
-    
-    monthlyTotals[monthYear] = (monthlyTotals[monthYear] || 0) + inrValue;
+
+    // Only count expenses where the current user is a payer or split participant
+    const mySplit = exp.splits ? exp.splits.find(sp => sp.user_name === currentUser.name) : null;
+    const isPayer = exp.paid_by === currentUser.name;
+    if (!mySplit && !isPayer) return;
+
+    // My personal share = what I owe (split amount) if I'm in splits, else 0
+    // If I paid, my "cost" is my split share (what I personally consumed)
+    const myShareInr = mySplit ? (mySplit.calculated_amount_inr || mySplit.calculated_amount * (exp.exchange_rate || 1.0)) : 0;
+
+    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    const monthLabel = date.toLocaleString('default', { month: 'short', year: 'numeric' });
+    if (!monthlyTotals[monthKey]) monthlyTotals[monthKey] = { label: monthLabel, total: 0 };
+    monthlyTotals[monthKey].total += myShareInr;
   });
 
-  // Keep months in logical order
-  const labels = Object.keys(monthlyTotals).sort((a, b) => {
-    return new Date(a) - new Date(b);
-  });
-  const data = labels.map(l => monthlyTotals[l]);
+  // Sort by date key (YYYY-MM)
+  const sortedKeys = Object.keys(monthlyTotals).sort();
+  const labels = sortedKeys.map(k => monthlyTotals[k].label);
+  const data = sortedKeys.map(k => parseFloat(monthlyTotals[k].total.toFixed(2)));
 
-  if (myChart) {
-    myChart.destroy();
-  }
+  if (myChart) myChart.destroy();
+
+  // Build a gradient fill for the line chart
+  const gradient = ctx.createLinearGradient(0, 0, 0, 260);
+  gradient.addColorStop(0, 'rgba(93, 91, 246, 0.35)');
+  gradient.addColorStop(0.6, 'rgba(93, 91, 246, 0.08)');
+  gradient.addColorStop(1, 'rgba(93, 91, 246, 0.0)');
 
   myChart = new Chart(ctx, {
-    type: 'bar',
+    type: 'line',
     data: {
-      labels: labels,
+      labels,
       datasets: [{
-        label: 'Total Shared Spending (INR)',
-        data: data,
-        backgroundColor: [
-          'rgba(93, 91, 246, 0.6)',
-          'rgba(46, 196, 182, 0.6)',
-          'rgba(255, 126, 103, 0.6)',
-          'rgba(255, 183, 3, 0.6)'
-        ],
-        borderColor: [
-          '#5d5bf6',
-          '#2ec4b6',
-          '#ff7e67',
-          '#ffb703'
-        ],
-        borderWidth: 2,
-        borderRadius: 8
+        label: 'My Share (₹)',
+        data,
+        borderColor: '#5d5bf6',
+        borderWidth: 2.5,
+        backgroundColor: gradient,
+        fill: true,
+        tension: 0.45,           // smooth bezier curves like Apple Finance
+        pointRadius: 4,
+        pointHoverRadius: 8,
+        pointBackgroundColor: '#ffffff',
+        pointBorderColor: '#5d5bf6',
+        pointBorderWidth: 2.5,
+        pointHoverBackgroundColor: '#5d5bf6',
+        pointHoverBorderColor: '#ffffff',
+        pointHoverBorderWidth: 2
       }]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: {
-          labels: { font: { family: 'Fredoka', weight: 'bold' } }
+        legend: { display: false },
+        tooltip: {
+          backgroundColor: 'rgba(255,255,255,0.97)',
+          titleColor: '#2b2d42',
+          bodyColor: '#5d5bf6',
+          borderColor: 'rgba(93,91,246,0.25)',
+          borderWidth: 1,
+          cornerRadius: 12,
+          padding: 12,
+          titleFont: { family: 'Fredoka', size: 13, weight: 'bold' },
+          bodyFont: { family: 'Nunito', size: 14, weight: 'bold' },
+          callbacks: {
+            label: (ctx) => `  ₹${ctx.parsed.y.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+          }
         }
       },
       scales: {
         y: {
           beginAtZero: true,
-          ticks: { font: { family: 'Nunito', weight: 'bold' } }
+          grid: { color: 'rgba(0,0,0,0.05)', drawBorder: false },
+          ticks: {
+            font: { family: 'Nunito', size: 11 },
+            color: '#a0aec0',
+            callback: v => '₹' + (v >= 1000 ? (v/1000).toFixed(1) + 'k' : v)
+          },
+          border: { display: false }
         },
         x: {
-          ticks: { font: { family: 'Nunito', weight: 'bold' } }
+          grid: { display: false },
+          ticks: { font: { family: 'Nunito', size: 11, weight: '600' }, color: '#718096' },
+          border: { display: false }
         }
+      },
+      animation: {
+        duration: 800,
+        easing: 'easeInOutQuart'
       }
     }
   });
 }
+
+// Download Monthly Expense Statement as CSV
+function downloadMonthlyStatement() {
+  if (!currentUser) return alert('Please log in first.');
+  if (!expensesList || expensesList.length === 0) return alert('No expenses to export.');
+
+  const activeGroup = groupsList.find(g => g.id === currentGroupId);
+  const groupName = activeGroup ? activeGroup.name : 'Group';
+
+  // Build rows: only expenses involving the current user
+  const rows = [
+    ['Month', 'Date', 'Description', 'Category', 'Paid By', 'Total Amount', 'Currency', 'Your Share (INR)', 'Status']
+  ];
+
+  expensesList.forEach(exp => {
+    if (exp.is_settlement) return;
+    const mySplit = exp.splits ? exp.splits.find(sp => sp.user_name === currentUser.name) : null;
+    const isPayer = exp.paid_by === currentUser.name;
+    if (!mySplit && !isPayer) return;
+
+    const date = new Date(exp.date);
+    const monthLabel = isNaN(date.getTime()) ? '' : date.toLocaleString('default', { month: 'long', year: 'numeric' });
+    const myShareInr = mySplit
+      ? (mySplit.calculated_amount_inr || mySplit.calculated_amount * (exp.exchange_rate || 1.0))
+      : 0;
+
+    rows.push([
+      monthLabel,
+      exp.date,
+      `"${(exp.description || '').replace(/"/g, '""')}"`,
+      exp.category || 'General',
+      exp.paid_by,
+      exp.amount,
+      exp.currency || 'INR',
+      myShareInr.toFixed(2),
+      exp.status || 'approved'
+    ]);
+  });
+
+  // Add a monthly summary at the bottom
+  rows.push([]);
+  rows.push(['--- MONTHLY SUMMARY ---']);
+  rows.push(['Month', 'My Total Share (INR)']);
+
+  const monthlySums = {};
+  expensesList.forEach(exp => {
+    if (exp.is_settlement) return;
+    const mySplit = exp.splits ? exp.splits.find(sp => sp.user_name === currentUser.name) : null;
+    if (!mySplit) return;
+    const date = new Date(exp.date);
+    if (isNaN(date.getTime())) return;
+    const month = date.toLocaleString('default', { month: 'long', year: 'numeric' });
+    const amt = mySplit.calculated_amount_inr || mySplit.calculated_amount * (exp.exchange_rate || 1.0);
+    monthlySums[month] = (monthlySums[month] || 0) + amt;
+  });
+
+  Object.entries(monthlySums).sort().forEach(([month, total]) => {
+    rows.push([month, total.toFixed(2)]);
+  });
+
+  const csvContent = rows.map(r => r.join(',')).join('\n');
+  const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const today = new Date().toISOString().split('T')[0];
+  link.href = url;
+  link.download = `HisaabKitaab_Statement_${currentUser.name}_${groupName}_${today}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
 
 // --- EXPENSES LIST VIEW ---
 function renderExpensesList() {

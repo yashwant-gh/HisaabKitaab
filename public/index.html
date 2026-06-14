@@ -204,8 +204,21 @@
 
           <!-- Chart Visuals Section -->
           <div class="chart-container dashboard-card">
-            <h3>📈 Monthly Expenses Overview</h3>
-            <div class="chart-wrapper">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 8px;">
+              <h3 style="margin: 0;">📈 My Monthly Spending</h3>
+              <button id="btn-download-statement" onclick="downloadMonthlyStatement()" style="
+                display: flex; align-items: center; gap: 6px;
+                background: linear-gradient(135deg, #5d5bf6, #7c6af7);
+                color: white; border: none; border-radius: 10px;
+                padding: 8px 16px; font-size: 0.82rem; font-family: 'Fredoka', sans-serif;
+                cursor: pointer; font-weight: 600; letter-spacing: 0.3px;
+                box-shadow: 0 2px 10px rgba(93,91,246,0.35);
+                transition: all 0.2s ease;
+              " onmouseover="this.style.transform='translateY(-1px)'; this.style.boxShadow='0 4px 16px rgba(93,91,246,0.5)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 10px rgba(93,91,246,0.35)';">
+                ⬇️ Download Statement
+              </button>
+            </div>
+            <div class="chart-wrapper" style="position: relative; height: 260px;">
               <canvas id="monthlyChart"></canvas>
             </div>
           </div>
