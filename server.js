@@ -243,14 +243,183 @@ app.get('/api/auth/me', authenticateToken, (req, res) => {
 // GROUP MANAGEMENT
 // ==========================================
 
-// Get user's groups
+// Get user's groups (only groups where the user is a member)
 app.get('/api/groups', authenticateToken, async (req, res) => {
   try {
-    // For simplicity, returns all groups since this is a shared workspace flatmate app
-    const groups = await db.query(`SELECT * FROM groups`);
+    const groups = await db.query(
+      `SELECT g.id, g.name, g.description, g.created_at
+       FROM groups g
+       JOIN group_members gm ON g.id = gm.group_id
+       WHERE gm.user_name = ?`,
+      [req.user.name]
+    );
     res.json(groups);
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Failed to fetch groups' });
+  }
+});
+
+// Create a new group
+app.post('/api/groups', authenticateToken, async (req, res) => {
+  const { name, description } = req.body;
+  if (!name) return res.status(400).json({ error: 'Group name is required' });
+
+  try {
+    const result = await db.run(
+      `INSERT INTO groups (name, description) VALUES (?, ?)`,
+      [name, description || '']
+    );
+    const groupId = result.lastID;
+
+    // Add creator as member
+    const today = new Date().toISOString().split('T')[0];
+    await db.run(
+      `INSERT INTO group_members (group_id, user_name, joined_at, left_at) VALUES (?, ?, ?, NULL)`,
+      [groupId, req.user.name, today]
+    );
+
+    res.json({ message: 'Group created successfully!', groupId });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to create group' });
+  }
+});
+
+// Invite a member to group
+app.post('/api/groups/:id/invite', authenticateToken, async (req, res) => {
+  const { email } = req.body;
+  const groupId = req.params.id;
+
+  if (!email) return res.status(400).json({ error: 'Email address is required' });
+
+  try {
+    // Check if the user is a member of the group
+    const memberships = await db.query(
+      `SELECT * FROM group_members WHERE group_id = ? AND user_name = ?`,
+      [groupId, req.user.name]
+    );
+    if (memberships.length === 0) {
+      return res.status(403).json({ error: 'Forbidden: You are not a member of this group' });
+    }
+
+    // Check if already a member
+    const users = await db.query(`SELECT * FROM users WHERE email = ?`, [email.trim().toLowerCase()]);
+    if (users.length > 0) {
+      const memberCheck = await db.query(
+        `SELECT * FROM group_members WHERE group_id = ? AND user_name = ?`,
+        [groupId, users[0].name]
+      );
+      if (memberCheck.length > 0) {
+        return res.status(400).json({ error: 'User is already a member of this group' });
+      }
+    }
+
+    // Check if invitation already exists
+    const inviteCheck = await db.query(
+      `SELECT * FROM group_invitations WHERE group_id = ? AND invitee_email = ? AND status = 'pending'`,
+      [groupId, email.trim().toLowerCase()]
+    );
+    if (inviteCheck.length > 0) {
+      return res.status(400).json({ error: 'Invitation is already pending for this email' });
+    }
+
+    // Insert invitation
+    await db.run(
+      `INSERT INTO group_invitations (group_id, invited_by, invitee_email, status) VALUES (?, ?, ?, 'pending')`,
+      [groupId, req.user.name, email.trim().toLowerCase()]
+    );
+
+    // Send invitation email
+    try {
+      const groupDetails = await db.query(`SELECT name FROM groups WHERE id = ?`, [groupId]);
+      const groupName = groupDetails[0] ? groupDetails[0].name : 'a group';
+      
+      const mailOptions = {
+        from: `"Hisaab Kitaab" <${process.env.SMTP_USER || 'no-reply@hisaab.com'}>`,
+        to: email,
+        subject: `Invitation to join group "${groupName}" on Hisaab Kitaab`,
+        text: `Hello,\n\n${req.user.name} has invited you to join their expense sharing group "${groupName}" on Hisaab Kitaab.\n\nSign in or register with this email to accept the invitation and start sharing expenses!\n\nBest regards,\nThe Hisaab Kitaab Team`,
+        html: `
+          <div style="font-family: 'Nunito', sans-serif; padding: 20px; border: 1px solid #edf2f7; border-radius: 12px; max-width: 500px; margin: 0 auto; background-color: #f7fafc;">
+            <h2 style="color: #5d5bf6; font-family: 'Fredoka', sans-serif; text-align: center; margin-bottom: 20px;">💸 Hisaab Kitaab</h2>
+            <p style="font-size: 1rem; color: #2b2d42;">Hello,</p>
+            <p style="font-size: 1rem; color: #2b2d42;"><strong>${req.user.name}</strong> has invited you to join their expense-splitting group <strong>"${groupName}"</strong> on Hisaab Kitaab.</p>
+            <p style="font-size: 1rem; color: #2b2d42;">Log in or create an account with this email address to accept the invitation and start splitting bills!</p>
+            <hr style="border: 0; border-top: 1px solid #edf2f7; margin: 20px 0;">
+            <p style="font-size: 0.8rem; color: #a0aec0; text-align: center;">Hisaab Kitaab App — Splitting expenses made easy, clean, and playful!</p>
+          </div>
+        `
+      };
+      await transporter.sendMail(mailOptions);
+    } catch (mailErr) {
+      console.warn('Failed to send SMTP invite email, but invitation record was created.', mailErr);
+    }
+
+    res.json({ message: 'Invitation sent successfully!' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to process invitation' });
+  }
+});
+
+// Get pending invitations for the logged-in user
+app.get('/api/invitations', authenticateToken, async (req, res) => {
+  try {
+    const userEmail = req.user.email.trim().toLowerCase();
+    const invitations = await db.query(
+      `SELECT gi.id, gi.group_id, gi.invited_by, gi.created_at, g.name as group_name, g.description as group_description
+       FROM group_invitations gi
+       JOIN groups g ON gi.group_id = g.id
+       WHERE gi.invitee_email = ? AND gi.status = 'pending'`,
+      [userEmail]
+    );
+    res.json(invitations);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch invitations' });
+  }
+});
+
+// Respond to an invitation
+app.post('/api/invitations/:id/respond', authenticateToken, async (req, res) => {
+  const { action } = req.body; // 'accept' or 'decline'
+  const inviteId = req.params.id;
+
+  if (!action || (action !== 'accept' && action !== 'decline')) {
+    return res.status(400).json({ error: 'Action must be accept or decline' });
+  }
+
+  try {
+    const invites = await db.query(
+      `SELECT * FROM group_invitations WHERE id = ? AND invitee_email = ? AND status = 'pending'`,
+      [inviteId, req.user.email.trim().toLowerCase()]
+    );
+
+    if (invites.length === 0) {
+      return res.status(404).json({ error: 'Invitation not found or already processed' });
+    }
+
+    const invite = invites[0];
+
+    if (action === 'accept') {
+      await db.run(`UPDATE group_invitations SET status = 'accepted' WHERE id = ?`, [inviteId]);
+
+      // Add member to group
+      const today = new Date().toISOString().split('T')[0];
+      await db.run(
+        `INSERT INTO group_members (group_id, user_name, joined_at, left_at) VALUES (?, ?, ?, NULL)`,
+        [invite.group_id, req.user.name, today]
+      );
+
+      res.json({ message: 'Invitation accepted! You have joined the group.', groupId: invite.group_id });
+    } else {
+      await db.run(`UPDATE group_invitations SET status = 'declined' WHERE id = ?`, [inviteId]);
+      res.json({ message: 'Invitation declined.' });
+    }
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to respond to invitation' });
   }
 });
 
@@ -323,24 +492,40 @@ app.get('/api/exchange-rate', async (req, res) => {
   res.json({ rate });
 });
 
-// Get group expenses
+// Get group expenses (Privacy-filtered: can only see expenses they are a part of)
 app.get('/api/groups/:groupId/expenses', authenticateToken, async (req, res) => {
   try {
+    // Security check: is the user a member of the group?
+    const memberships = await db.query(
+      `SELECT * FROM group_members WHERE group_id = ? AND user_name = ?`,
+      [req.params.groupId, req.user.name]
+    );
+    if (memberships.length === 0) {
+      return res.status(403).json({ error: 'Forbidden: You are not a member of this group' });
+    }
+
     const expenses = await db.query(
       `SELECT * FROM expenses WHERE group_id = ? ORDER BY date DESC, id DESC`,
       [req.params.groupId]
     );
 
-    // Fetch splits for each expense
+    const filteredExpenses = [];
+    // Fetch splits for each expense and filter
     for (const exp of expenses) {
       exp.splits = await db.query(
         `SELECT user_name, split_value, calculated_amount, calculated_amount_inr FROM expense_splits WHERE expense_id = ?`,
         [exp.id]
       );
+      
+      const isParticipant = exp.splits.some(sp => sp.user_name === req.user.name);
+      if (exp.paid_by === req.user.name || isParticipant) {
+        filteredExpenses.push(exp);
+      }
     }
 
-    res.json(expenses);
+    res.json(filteredExpenses);
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Failed to fetch expenses' });
   }
 });
@@ -620,11 +805,14 @@ app.get('/api/groups/:groupId/balances', authenticateToken, async (req, res) => 
       };
     });
 
+    // Security check: strictly return ONLY the audit trail for the authenticated user
+    const myAudit = audits[req.user.name] || { auditTrail: [], finalBalance: 0 };
+
     res.json({
       balances,          // Raw balances
       payments,          // Aisha's paywhom transactions
-      audits,            // Rohan's/Priya's detailed transaction trails
-      memberMap          // Membership date details (helpful for Sam's validation UI)
+      myAudit,           // STRICTLY the logged-in user's detailed transaction trail (Privacy Secured)
+      memberMap          // Membership date details
     });
 
   } catch (err) {

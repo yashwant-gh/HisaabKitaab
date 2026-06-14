@@ -2,7 +2,7 @@
 let token = localStorage.getItem('token') || '';
 let currentUser = JSON.parse(localStorage.getItem('user')) || null;
 let activeTab = 'dashboard';
-let viewingPerspective = ''; // Name of member whose perspective is active
+let activeViewFormat = 'audit'; // View style: audit, debts, currency, timeline
 let balancesData = null;     // Computed balance, audits, simplified debts
 let expensesList = [];       // Loaded expenses
 let membersList = [];        // Loaded group members
@@ -39,19 +39,20 @@ function showMainScreen() {
   document.getElementById('auth-screen').classList.add('hidden');
   document.getElementById('main-screen').classList.remove('hidden');
   
-  // Set default view perspective to the logged in user
   if (currentUser) {
     document.getElementById('user-display-name').innerText = currentUser.name;
     document.getElementById('user-avatar').src = currentUser.avatar_url;
-    
-    // Set perspective selector
-    const dropdown = document.getElementById('perspective-dropdown');
-    dropdown.value = currentUser.name;
-    viewingPerspective = currentUser.name;
   }
   
-  // Load data
-  refreshData();
+  // Set default view format selector
+  const viewFormatDropdown = document.getElementById('view-format-dropdown');
+  if (viewFormatDropdown) {
+    viewFormatDropdown.value = 'audit';
+  }
+  activeViewFormat = 'audit';
+  
+  // Load user's groups first
+  loadGroups();
 }
 
 async function refreshData() {
@@ -61,6 +62,214 @@ async function refreshData() {
   
   // Update view
   updatePerspectiveView();
+}
+
+// --- GROUP & INVITATION MANAGEMENT ---
+let groupsList = [];
+async function loadGroups() {
+  try {
+    const res = await fetch(`${API_BASE}/api/groups`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await res.json();
+    if (res.ok) {
+      groupsList = data;
+      populateGroupsDropdown();
+      
+      if (groupsList.length > 0) {
+        // If currentGroupId is not set or not in the user's groups, pick the first one
+        if (!groupsList.some(g => g.id === currentGroupId)) {
+          currentGroupId = groupsList[0].id;
+        }
+        document.getElementById('group-dropdown').value = currentGroupId;
+        
+        // Show dashboard elements, hide no-groups-panel
+        document.getElementById('no-groups-panel').classList.add('hidden');
+        document.getElementById('perspective-info-banner').classList.remove('hidden');
+        document.querySelector('.dashboard-grid').classList.remove('hidden');
+        document.querySelector('.chart-container').classList.remove('hidden');
+        document.getElementById('audit-trail-container').classList.remove('hidden');
+        
+        // Update header group name
+        const activeGroup = groupsList.find(g => g.id === currentGroupId);
+        document.getElementById('current-group-name').innerText = activeGroup ? activeGroup.name : '';
+        
+        refreshData();
+      } else {
+        // No groups found!
+        // Hide dashboard elements, show no-groups-panel
+        document.getElementById('no-groups-panel').classList.remove('hidden');
+        document.getElementById('perspective-info-banner').classList.add('hidden');
+        document.querySelector('.dashboard-grid').classList.add('hidden');
+        document.querySelector('.chart-container').classList.add('hidden');
+        document.getElementById('audit-trail-container').classList.add('hidden');
+        document.getElementById('current-group-name').innerText = 'None';
+      }
+      
+      // Fetch invitations regardless
+      fetchInvitations();
+    } else {
+      console.error('Failed to load groups:', data.error);
+    }
+  } catch (err) {
+    console.error('Failed to connect to groups API:', err);
+  }
+}
+
+function populateGroupsDropdown() {
+  const dropdown = document.getElementById('group-dropdown');
+  if (dropdown) {
+    dropdown.innerHTML = '';
+    groupsList.forEach(g => {
+      dropdown.innerHTML += `<option value="${g.id}">${g.name}</option>`;
+    });
+  }
+}
+
+function changeActiveGroup() {
+  const dropdown = document.getElementById('group-dropdown');
+  if (dropdown) {
+    currentGroupId = parseInt(dropdown.value);
+    
+    const activeGroup = groupsList.find(g => g.id === currentGroupId);
+    document.getElementById('current-group-name').innerText = activeGroup ? activeGroup.name : '';
+    
+    refreshData();
+  }
+}
+
+async function createNewGroupSubmit() {
+  const name = document.getElementById('new-group-name').value.trim();
+  const desc = document.getElementById('new-group-desc').value.trim();
+  if (!name) return alert('Please enter a group name');
+  
+  try {
+    const res = await fetch(`${API_BASE}/api/groups`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ name, description: desc })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      alert(data.message);
+      document.getElementById('new-group-name').value = '';
+      document.getElementById('new-group-desc').value = '';
+      currentGroupId = data.groupId;
+      loadGroups();
+    } else {
+      alert(data.error || 'Failed to create group');
+    }
+  } catch (err) {
+    alert('Error creating group');
+  }
+}
+
+async function fetchInvitations() {
+  try {
+    const res = await fetch(`${API_BASE}/api/invitations`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await res.json();
+    if (res.ok) {
+      renderInvitations(data);
+    }
+  } catch (err) {
+    console.error('Failed to fetch invitations:', err);
+  }
+}
+
+function renderInvitations(invitations) {
+  const container = document.getElementById('dashboard-notifications-container');
+  if (!container) return;
+  container.innerHTML = '';
+  
+  if (invitations.length === 0) {
+    container.style.display = 'none';
+    return;
+  }
+  
+  container.style.display = 'block';
+  invitations.forEach(inv => {
+    container.innerHTML += `
+      <div class="notification-card info animate-slide-in">
+        <div class="notification-content">
+          <span class="notification-emoji">✉️</span>
+          <div>
+            <strong>Group Invitation!</strong><br>
+            <span>${inv.invited_by} invited you to join the group "<strong>${inv.group_name}</strong>".</span>
+          </div>
+        </div>
+        <div class="notification-actions">
+          <button class="btn btn-success btn-sm" onclick="respondToInvitation(${inv.id}, 'accept')">Accept</button>
+          <button class="btn btn-danger btn-sm" onclick="respondToInvitation(${inv.id}, 'decline')">Decline</button>
+        </div>
+      </div>`;
+  });
+}
+
+async function respondToInvitation(inviteId, action) {
+  try {
+    const res = await fetch(`${API_BASE}/api/invitations/${inviteId}/respond`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ action })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      alert(data.message);
+      if (action === 'accept') {
+        currentGroupId = data.groupId;
+      }
+      loadGroups();
+    } else {
+      alert(data.error || 'Failed to respond to invitation');
+    }
+  } catch (err) {
+    alert('Error responding to invitation');
+  }
+}
+
+function showInviteMemberForm() {
+  const container = document.getElementById('member-invite-form-container');
+  if (container) container.classList.remove('hidden');
+}
+
+function hideInviteMemberForm() {
+  const container = document.getElementById('member-invite-form-container');
+  if (container) container.classList.add('hidden');
+}
+
+async function submitInvitation(event) {
+  event.preventDefault();
+  const email = document.getElementById('invite-email').value.trim();
+  if (!email) return alert('Please enter email');
+  
+  try {
+    const res = await fetch(`${API_BASE}/api/groups/${currentGroupId}/invite`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ email })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      alert(data.message || 'Invitation sent successfully!');
+      document.getElementById('invite-email').value = '';
+      hideInviteMemberForm();
+    } else {
+      alert(data.error || 'Failed to send invitation');
+    }
+  } catch (err) {
+    alert('Error sending invitation');
+  }
 }
 
 // --- AUTHENTICATION ---
@@ -73,6 +282,12 @@ function switchAuthTab(type) {
 }
 
 // Social Google Login Simulation
+async function loginAsGoogleSimulated() {
+  const name = document.getElementById('google-name-input').value.trim();
+  if (!name) return alert('Please enter a name');
+  await loginAsGoogle(name);
+}
+
 async function loginAsGoogle(name) {
   try {
     const res = await fetch(`${API_BASE}/api/auth/google-login`, {
@@ -271,39 +486,39 @@ async function fetchBalances() {
 }
 
 // --- PERSPECTIVES AND AUDITS ---
-function changePerspective() {
-  viewingPerspective = document.getElementById('perspective-dropdown').value;
+// --- FORMAT SWITCHING AND AUDITS ---
+function changeViewFormat() {
+  activeViewFormat = document.getElementById('view-format-dropdown').value;
   updatePerspectiveView();
 }
 
 function updatePerspectiveView() {
-  if (!balancesData || !viewingPerspective) return;
+  if (!balancesData || !currentUser) return;
   
-  const netBalance = balancesData.balances[viewingPerspective] || 0;
-  const avatarUrl = `https://api.dicebear.com/7.x/adventurer/svg?seed=${viewingPerspective}`;
+  const netBalance = balancesData.balances[currentUser.name] || 0;
+  const avatarUrl = currentUser.avatar_url;
   
   // Update Header details
   document.getElementById('perspective-avatar').src = avatarUrl;
-  document.getElementById('perspective-title').innerText = `Viewing as ${viewingPerspective}`;
+  document.getElementById('perspective-title').innerText = `Logged in as ${currentUser.name}`;
   
   const banner = document.getElementById('perspective-info-banner');
   // Reset styles
-  banner.className = 'perspective-info-card';
-  banner.classList.add(viewingPerspective.toLowerCase());
+  if (banner) {
+    banner.className = 'perspective-info-card ' + activeViewFormat;
+  }
   
   let subtitleText = '';
-  if (viewingPerspective === 'Aisha') {
+  if (activeViewFormat === 'debts') {
     subtitleText = 'Aisha wants one simple number: “Who pays whom, how much, done.”';
-  } else if (viewingPerspective === 'Rohan') {
+  } else if (activeViewFormat === 'audit') {
     subtitleText = 'Rohan requested: “No magic numbers. If the app says I owe, I want to see exactly why.”';
-  } else if (viewingPerspective === 'Priya') {
+  } else if (activeViewFormat === 'currency') {
     subtitleText = 'Priya wants USD vs INR check: “Half the trip was in dollars. Do not pretend a dollar is a rupee.”';
-  } else if (viewingPerspective === 'Meera') {
-    subtitleText = 'Meera wanted duplicates cleaned up, but requested she review/approve everything changes.';
-  } else if (viewingPerspective === 'Sam') {
+  } else if (activeViewFormat === 'timeline') {
     subtitleText = 'Sam joined mid-April: “Why would March electricity affect my balance?”';
   } else {
-    subtitleText = 'Perspective view active for guest member.';
+    subtitleText = 'Perspective view active.';
   }
   document.getElementById('perspective-subtitle').innerText = subtitleText;
 
@@ -328,15 +543,15 @@ function updatePerspectiveView() {
   const dynTitle = document.getElementById('perspective-card-title');
   const dynContent = document.getElementById('perspective-dynamic-content');
   
-  if (viewingPerspective === 'Aisha') {
+  if (activeViewFormat === 'debts') {
     dynTitle.innerText = "Aisha's View: Cash Minimization Settlements";
     let html = '<div class="debt-simplification-list">';
     if (balancesData.payments.length === 0) {
       html += '<p>🎉 No outstanding debts! Everyone is settled.</p>';
     } else {
       balancesData.payments.forEach(pay => {
-        const isFromMe = pay.from === 'Aisha';
-        const isToMe = pay.to === 'Aisha';
+        const isFromMe = pay.from === currentUser.name;
+        const isToMe = pay.to === currentUser.name;
         const highlights = isFromMe ? 'color: var(--error-color)' : (isToMe ? 'color: var(--success-color)' : '');
         html += `
           <div class="debt-item">
@@ -347,7 +562,7 @@ function updatePerspectiveView() {
     }
     html += '</div>';
     dynContent.innerHTML = html;
-  } else if (viewingPerspective === 'Rohan') {
+  } else if (activeViewFormat === 'audit') {
     dynTitle.innerText = "Rohan's Vibe: Zero Magic Numbers";
     dynContent.innerHTML = `
       <p>Every single transaction below is calculated with full transparency. Your net balance of 
@@ -358,7 +573,7 @@ function updatePerspectiveView() {
         <li>Direct cash settlements recorded</li>
       </ul>
       Scroll down to view your audit table!</p>`;
-  } else if (viewingPerspective === 'Priya') {
+  } else if (activeViewFormat === 'currency') {
     dynTitle.innerText = "Priya's View: Dollar Trip Conversions";
     // Count USD items
     const usdExpenses = expensesList.filter(e => e.currency === 'USD');
@@ -366,7 +581,7 @@ function updatePerspectiveView() {
       <p>We found <strong>${usdExpenses.length} trip expenses</strong> recorded in USD. We converted them dynamically based on historical exchange rates to keep balances correct:</p>
       <div class="debt-simplification-list mt-2">`;
     usdExpenses.forEach(exp => {
-      const mySplit = exp.splits.find(s => s.user_name === 'Priya');
+      const mySplit = exp.splits.find(s => s.user_name === currentUser.name);
       const share = mySplit ? mySplit.calculated_amount : 0;
       html += `
         <div class="debt-item">
@@ -374,33 +589,38 @@ function updatePerspectiveView() {
             <strong>${exp.description}</strong><br>
             <small>Total: $${exp.amount} | Rate: ₹${exp.exchange_rate.toFixed(2)}</small>
           </div>
-          <span class="amount">Share: ₹${(mySplit ? mySplit.calculated_amount_inr : 0).toFixed(2)}</span>
+          <span class="amount">Your Share: ₹${(mySplit ? mySplit.calculated_amount_inr : 0).toFixed(2)}</span>
         </div>`;
     });
     html += '</div>';
     dynContent.innerHTML = html;
-  } else if (viewingPerspective === 'Sam') {
+  } else if (activeViewFormat === 'timeline') {
     dynTitle.innerText = "Sam's View: Joining Timeline Check";
-    const samTimeline = balancesData.memberMap['Sam'];
-    const preJoinMarchElectr = expensesList.find(e => e.description.toLowerCase().includes('electricity mar') || e.date < '2026-04-15');
+    const myTimeline = balancesData.memberMap[currentUser.name];
+    const joined = myTimeline ? myTimeline.joined : 'N/A';
+    const left = myTimeline && myTimeline.left ? myTimeline.left : 'present';
     
-    dynContent.innerHTML = `
-      <p>📅 <strong>Membership Active Range:</strong> ${samTimeline.joined} to present.</p>
-      <p class="mt-2">Because you joined on April 15, you are only split into expenses after that date. 
-      For example, <strong>March Electricity</strong> split list only included: 
-      <code>Aisha; Rohan; Priya; Meera</code>. You owe <strong>₹0.00</strong> for it!</p>
-      <div class="debt-item mt-2">
-        <span>March Electricity (18-03-2026)</span>
-        <span class="amount positive" style="color:var(--success-color)">₹0.00 Share</span>
-      </div>`;
-  } else if (viewingPerspective === 'Meera') {
-    dynTitle.innerText = "Meera's View: CSV Import & Approvals";
-    dynContent.innerHTML = `
-      <p>You left the flat on March 31, 2026. Therefore, you are excluded from April rent and deep cleaning charges.</p>
-      <p class="mt-2">Need to import the spreadsheet? Switch to the <strong>📥 Import CSV</strong> tab to review and clean the data. All changes require confirmation before being written.</p>
-      <button class="btn btn-secondary mt-2 w-100" onclick="switchTab('import')">Go to CSV Import Wizard</button>`;
+    // Find one example pre-joined expense if any
+    const preJoinExp = expensesList.find(e => e.date < joined);
+    
+    let timelineExplanation = `
+      <p>📅 <strong>Your Membership Active Range:</strong> ${joined} to ${left}.</p>
+      <p class="mt-2">Because you joined on ${joined}, you are only split into expenses after that date.</p>`;
+      
+    if (preJoinExp) {
+      timelineExplanation += `
+        <p class="mt-2">For example, <strong>${preJoinExp.description}</strong> (dated ${preJoinExp.date}) split list did not include you. You owe <strong>₹0.00</strong> for it!</p>
+        <div class="debt-item mt-2">
+          <span>${preJoinExp.description} (${preJoinExp.date})</span>
+          <span class="amount positive" style="color:var(--success-color)">₹0.00 Share</span>
+        </div>`;
+    } else {
+      timelineExplanation += `<p class="mt-2">No expenses recorded before your joined date.</p>`;
+    }
+    
+    dynContent.innerHTML = timelineExplanation;
   } else {
-    dynTitle.innerText = `${viewingPerspective}'s Balance Summary`;
+    dynTitle.innerText = `${currentUser.name}'s Balance Summary`;
     dynContent.innerHTML = `<p>Active member details and ledger records are compiled below.</p>`;
   }
 
@@ -414,17 +634,19 @@ function renderAuditTrail() {
   const auditCount = document.getElementById('audit-count');
   const tbody = document.getElementById('audit-trail-rows');
   
-  auditUsername.innerText = viewingPerspective;
+  if (auditUsername) {
+    auditUsername.innerText = currentUser ? currentUser.name : 'You';
+  }
   tbody.innerHTML = '';
   
-  const auditData = balancesData.audits[viewingPerspective];
-  if (!auditData || auditData.auditTrail.length === 0) {
-    auditCount.innerText = '0 items';
+  const auditData = balancesData.myAudit;
+  if (!auditData || !auditData.auditTrail || auditData.auditTrail.length === 0) {
+    if (auditCount) auditCount.innerText = '0 items';
     tbody.innerHTML = `<tr><td colspan="8" class="text-center">No transactions logged for this member.</td></tr>`;
     return;
   }
 
-  auditCount.innerText = `${auditData.auditTrail.length} transactions`;
+  if (auditCount) auditCount.innerText = `${auditData.auditTrail.length} transactions`;
 
   auditData.auditTrail.forEach(row => {
     const isPayer = row.paidAmount > 0;
@@ -901,6 +1123,38 @@ async function uploadCSVFile(file) {
       importIssues = data.issues;
       resolvedActions = {}; // clear
       
+      // Client-side detection of missing members in group
+      const csvNames = new Set();
+      rawCSVRows.forEach(row => {
+        if (row.paidBy) csvNames.add(row.paidBy);
+        if (row.splitWith) row.splitWith.forEach(n => csvNames.add(n));
+      });
+      
+      const currentMemberNames = new Set(membersList.map(m => m.user_name.toLowerCase()));
+      const missingMembers = [];
+      csvNames.forEach(name => {
+        if (name && !currentMemberNames.has(name.toLowerCase())) {
+          missingMembers.push(name);
+        }
+      });
+      
+      if (missingMembers.length > 0) {
+        missingMembers.forEach((name) => {
+          // Find first date they are referenced
+          const matchingRow = rawCSVRows.find(r => r.paidBy === name || (r.splitWith && r.splitWith.includes(name)));
+          const firstDate = matchingRow ? matchingRow.date : new Date().toISOString().split('T')[0];
+          
+          importIssues.push({
+            id: `missing_member_${name}`,
+            type: 'missing_member',
+            name: name,
+            message: `User "${name}" is referenced in the CSV but is not a member of the active group.`,
+            suggestion: 'Add them to the group automatically or ignore.',
+            date: firstDate
+          });
+        });
+      }
+      
       // Switch view and render issues wizard
       document.getElementById('import-step-upload').classList.add('hidden');
       document.getElementById('import-step-wizard').classList.remove('hidden');
@@ -1037,6 +1291,18 @@ function renderImportWizard() {
             <span>Keep as a standard split expense</span>
           </label>
         </div>`;
+    } else if (issue.type === 'missing_member') {
+      optionsHtml = `
+        <div class="wizard-options-grid">
+          <label class="wizard-option-row">
+            <input type="radio" name="res_${issue.id}" value="add_to_group" checked>
+            <span>Automatically add "${issue.name}" to the active group (Joined date set to: ${issue.date})</span>
+          </label>
+          <label class="wizard-option-row">
+            <input type="radio" name="res_${issue.id}" value="ignore">
+            <span>Skip adding (Warning: Splits referencing this user might fail or cause anomalies)</span>
+          </label>
+        </div>`;
     }
 
     container.innerHTML += `
@@ -1050,6 +1316,31 @@ function renderImportWizard() {
 
 // Compute final cleaned row list and hit backend import endpoint
 async function executeFinalImport() {
+  // Handle adding missing members first
+  for (const issue of importIssues) {
+    if (issue.type === 'missing_member') {
+      const checkedElement = document.querySelector(`input[name="res_${issue.id}"]:checked`);
+      if (checkedElement && checkedElement.value === 'add_to_group') {
+        try {
+          await fetch(`${API_BASE}/api/groups/${currentGroupId}/members`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              user_name: issue.name,
+              joined_at: issue.date,
+              left_at: null
+            })
+          });
+        } catch (err) {
+          console.error(`Failed to automatically add missing member ${issue.name}:`, err);
+        }
+      }
+    }
+  }
+
   const finalizedExpenses = [];
   const excludedIndices = new Set();
   

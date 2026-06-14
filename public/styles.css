@@ -870,3 +870,67 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(93, 91, 246, 0.4);
 }
+
+/* Notifications & Invitations */
+.dashboard-notifications-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+.notification-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 15px;
+  background: linear-gradient(135deg, #fff9db 0%, #fff3bf 100%);
+  border-left: 6px solid var(--warning-color);
+  padding: 16px 24px;
+  border-radius: var(--border-radius-md);
+  box-shadow: var(--box-shadow-soft);
+  animation: slideIn 0.3s ease-out;
+}
+@keyframes slideIn {
+  from { transform: translateY(-10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.notification-card .message {
+  font-weight: 700;
+  color: #664d03;
+  font-size: 0.95rem;
+}
+.notification-card .actions {
+  display: flex;
+  gap: 10px;
+}
+.btn-notification-accept {
+  background: var(--success-color);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: var(--border-radius-sm);
+  font-family: var(--font-display);
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-notification-accept:hover {
+  background: var(--success-hover);
+  transform: scale(1.05);
+}
+.btn-notification-decline {
+  background: var(--error-color);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: var(--border-radius-sm);
+  font-family: var(--font-display);
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-notification-decline:hover {
+  background: #e03a58;
+  transform: scale(1.05);
+}

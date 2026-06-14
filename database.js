@@ -119,6 +119,15 @@ async function setupSchema() {
       calculated_amount_inr REAL,
       FOREIGN KEY (expense_id) REFERENCES expenses(id) ON DELETE CASCADE
     )`);
+    await run(`CREATE TABLE IF NOT EXISTS group_invitations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      group_id INTEGER,
+      invited_by TEXT,
+      invitee_email TEXT,
+      status TEXT DEFAULT 'pending',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE
+    )`);
   } else {
     // Postgres DDL
     await run(`CREATE TABLE IF NOT EXISTS users (
@@ -163,6 +172,14 @@ async function setupSchema() {
       split_value DOUBLE PRECISION,
       calculated_amount DOUBLE PRECISION,
       calculated_amount_inr DOUBLE PRECISION
+    )`);
+    await run(`CREATE TABLE IF NOT EXISTS group_invitations (
+      id SERIAL PRIMARY KEY,
+      group_id INTEGER REFERENCES groups(id) ON DELETE CASCADE,
+      invited_by TEXT,
+      invitee_email TEXT,
+      status TEXT DEFAULT 'pending',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`);
   }
 }

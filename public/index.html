@@ -29,46 +29,19 @@
 
       <!-- Tab Buttons for Auth -->
       <div class="auth-tabs">
-        <button id="tab-google" class="auth-tab-btn active" onclick="switchAuthTab('google')">Google Sign-in</button>
-        <button id="tab-email" class="auth-tab-btn" onclick="switchAuthTab('email')">Email Login/OTP</button>
+        <button id="tab-google" class="auth-tab-btn active" onclick="switchAuthTab('google')">Simulated Google OAuth</button>
+        <button id="tab-email" class="auth-tab-btn" onclick="switchAuthTab('email')">Email Verification / Signup</button>
       </div>
 
       <!-- Google Mock Section -->
       <div id="google-auth-section" class="auth-section">
-        <h3>Select flatmate to instantly log in:</h3>
-        <p class="subtitle">Quickly test the app from their unique perspective!</p>
-        <div class="google-users-grid">
-          <div class="google-user-card" onclick="loginAsGoogle('Aisha')">
-            <img src="https://api.dicebear.com/7.x/adventurer/svg?seed=Aisha" alt="Aisha">
-            <h4>Aisha</h4>
-            <span>“Just want one number”</span>
-          </div>
-          <div class="google-user-card" onclick="loginAsGoogle('Rohan')">
-            <img src="https://api.dicebear.com/7.x/adventurer/svg?seed=Rohan" alt="Rohan">
-            <h4>Rohan</h4>
-            <span>“No magic numbers”</span>
-          </div>
-          <div class="google-user-card" onclick="loginAsGoogle('Priya')">
-            <img src="https://api.dicebear.com/7.x/adventurer/svg?seed=Priya" alt="Priya">
-            <h4>Priya</h4>
-            <span>“Dollars vs Rupees”</span>
-          </div>
-          <div class="google-user-card" onclick="loginAsGoogle('Meera')">
-            <img src="https://api.dicebear.com/7.x/adventurer/svg?seed=Meera" alt="Meera">
-            <h4>Meera</h4>
-            <span>“Clean duplicates”</span>
-          </div>
-          <div class="google-user-card" onclick="loginAsGoogle('Sam')">
-            <img src="https://api.dicebear.com/7.x/adventurer/svg?seed=Sam" alt="Sam">
-            <h4>Sam</h4>
-            <span>“March electricity?”</span>
-          </div>
-          <div class="google-user-card" onclick="loginAsGoogle('Dev')">
-            <img src="https://api.dicebear.com/7.x/adventurer/svg?seed=Dev" alt="Dev">
-            <h4>Dev</h4>
-            <span>“Goa trip guest”</span>
-          </div>
+        <h3>Simulated Google Sign-in</h3>
+        <p class="subtitle">Enter any name to instantly simulate a Google OAuth login:</p>
+        <div class="form-group mt-3">
+          <label for="google-name-input">Google User Name</label>
+          <input type="text" id="google-name-input" placeholder="e.g. Aisha, Rohan, or any custom name">
         </div>
+        <button class="btn btn-primary w-100" onclick="loginAsGoogleSimulated()">Sign In with Google</button>
       </div>
 
       <!-- Email Login/Signup Section -->
@@ -111,14 +84,7 @@
             <h3>Complete Registration</h3>
             <div class="form-group">
               <label for="signup-name">Your Name</label>
-              <select id="signup-name">
-                <option value="Aisha">Aisha</option>
-                <option value="Rohan">Rohan</option>
-                <option value="Priya">Priya</option>
-                <option value="Meera">Meera</option>
-                <option value="Sam">Sam</option>
-                <option value="Dev">Dev</option>
-              </select>
+              <input type="text" id="signup-name" placeholder="e.g. Aisha, Rohan, or your custom name" required>
             </div>
             <div class="form-group">
               <label for="signup-password">Choose Password</label>
@@ -144,17 +110,22 @@
         </div>
         
         <div class="header-controls">
-          <!-- Multi-Perspective Dropdown Selector (CRITICAL USER REQUIREMENT) -->
+          <!-- Active Group Dropdown -->
           <div class="perspective-box">
-            <label for="perspective-dropdown">🔍 View Perspective:</label>
-            <select id="perspective-dropdown" onchange="changePerspective()">
-              <option value="Aisha">Aisha (Simplified Debts)</option>
-              <option value="Rohan">Rohan (Itemized Audit Ledger)</option>
-              <option value="Priya">Priya (Multi-currency conversions)</option>
-              <option value="Meera">Meera (Clean-up CSV & Approvals)</option>
-              <option value="Sam">Sam (Timeline constraints)</option>
-              <option value="Dev">Dev (Goa trip calculations)</option>
-              <option value="Kabir">Kabir (Goa parasailing day guest)</option>
+            <label for="group-dropdown">🏠 Active Group:</label>
+            <select id="group-dropdown" onchange="changeActiveGroup()">
+              <!-- Dynamic options -->
+            </select>
+          </div>
+          
+          <!-- View Format Selector -->
+          <div class="perspective-box">
+            <label for="view-format-dropdown">📊 View Format:</label>
+            <select id="view-format-dropdown" onchange="changeViewFormat()">
+              <option value="audit">Detailed Audit Ledger (Rohan's Style)</option>
+              <option value="debts">Simplified Debts (Aisha's Style)</option>
+              <option value="currency">Multi-currency conversions (Priya's Style)</option>
+              <option value="timeline">Timeline boundaries (Sam's Style)</option>
             </select>
           </div>
           
@@ -182,12 +153,31 @@
         <!-- DASHBOARD TAB -->
         <section id="panel-dashboard" class="tab-content">
           
-          <!-- Perspective Info Banner (Dynamic styling depending on user request) -->
+          <!-- Notifications / Invitations banner -->
+          <div id="dashboard-notifications-container" class="dashboard-notifications-container mt-2 mb-3">
+            <!-- Dynamic alerts -->
+          </div>
+
+          <!-- Group Creator Panel (Shown when user has no groups) -->
+          <div id="no-groups-panel" class="dashboard-card text-center py-5 hidden">
+            <div class="card-icon">🏠</div>
+            <h2>Welcome to Hisaab Kitaab!</h2>
+            <p style="color:var(--text-muted); margin-bottom: 20px;">To get started splitting bills, you first need to create a group or accept a pending invitation.</p>
+            <div class="form-group max-width-600 mt-4" style="margin: 0 auto; text-align: left;">
+              <label for="new-group-name">Group Name</label>
+              <input type="text" id="new-group-name" placeholder="e.g. Cozy Flat, Goa Trip 2026">
+              <label for="new-group-desc" class="mt-3">Description (Optional)</label>
+              <textarea id="new-group-desc" placeholder="e.g. Shared expenses with roommates"></textarea>
+              <button class="btn btn-primary w-100 mt-3" onclick="createNewGroupSubmit()">Create New Group</button>
+            </div>
+          </div>
+
+          <!-- Perspective Info Banner (Dynamic styling depending on view mode) -->
           <div class="perspective-info-card" id="perspective-info-banner">
             <div class="avatar-large"><img id="perspective-avatar" src="" alt="Avatar"></div>
             <div class="perspective-text">
-              <h3 id="perspective-title">Viewing as Rohan</h3>
-              <p id="perspective-subtitle">"Rohan requested no magic numbers - he wants to see exactly how his balance is computed."</p>
+              <h3 id="perspective-title">Detailed Audit Ledger</h3>
+              <p id="perspective-subtitle">"Rohan's Style: Proves your balance with zero magic numbers."</p>
             </div>
           </div>
 
@@ -201,10 +191,10 @@
               <span class="sub-label" id="dashboard-net-balance-label">You are owed</span>
             </div>
 
-            <!-- Dynamic Perspective-Specific Content Card -->
+            <!-- Dynamic View Mode Card -->
             <div class="dashboard-card summary-card dynamic-card">
               <div class="card-icon">🧠</div>
-              <h3 id="perspective-card-title">Aisha's Perspective (Simplified Debts)</h3>
+              <h3 id="perspective-card-title">View Mode Summary</h3>
               <div id="perspective-dynamic-content" class="dynamic-content-box">
                 <!-- Content generated via JavaScript -->
               </div>
@@ -222,7 +212,7 @@
           <!-- Detailed Balance Audit Section (Rohan's Requirement) -->
           <div class="dashboard-card audit-trail-card" id="audit-trail-container">
             <div class="audit-header">
-              <h3>🔍 Itemized Audit Breakdown: <span id="audit-username">Rohan</span></h3>
+              <h3>🔍 Itemized Audit Breakdown</h3>
               <span class="badge badge-info" id="audit-count">0 items</span>
             </div>
             <p class="help-text">Shows every expense the member paid or split, proving their net balance with zero magic numbers.</p>
@@ -419,9 +409,27 @@
           <div class="dashboard-card">
             <div class="card-header-row">
               <h3>Group Members & Timeline Limits</h3>
-              <button class="btn btn-primary" onclick="showAddMemberForm()">👤 Add Member</button>
+              <div style="display:flex; gap:10px;">
+                <button class="btn btn-primary" onclick="showInviteMemberForm()">✉️ Invite Friend</button>
+                <button class="btn btn-secondary" onclick="showAddMemberForm()">👤 Add/Edit Member Period</button>
+              </div>
             </div>
             <p class="help-text">Membership periods restrict split calculations to active dates, ensuring new members (like Sam) aren't charged for pre-join events.</p>
+
+            <!-- Invite Friend Form Box -->
+            <div class="member-add-form-box hidden" id="member-invite-form-container">
+              <h4>Invite Friend via Email</h4>
+              <form id="invite-form" onsubmit="submitInvitation(event)">
+                <div class="form-group">
+                  <label for="invite-email">Friend's Email Address</label>
+                  <input type="email" id="invite-email" placeholder="e.g. friend@gmail.com" required>
+                </div>
+                <div class="form-actions-row">
+                  <button type="button" class="btn btn-secondary" onclick="hideInviteMemberForm()">Cancel</button>
+                  <button type="submit" class="btn btn-success">Send Invitation</button>
+                </div>
+              </form>
+            </div>
 
             <div class="member-add-form-box hidden" id="member-add-form-container">
               <h4>Update Group Member Period</h4>
