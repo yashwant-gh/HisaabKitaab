@@ -15,14 +15,7 @@
 </head>
 <body>
 
-  <!-- Top Global Debug Banner for OTP verification (No SMTP account needed!) -->
-  <div id="debug-otp-banner" class="debug-otp-banner hidden">
-    <div class="debug-content">
-      <span class="debug-icon">🛠️ Dev Tool:</span>
-      <span>Last generated OTP is: <strong id="debug-otp-code">------</strong></span>
-      <button onclick="copyDebugOTP()" class="btn-copy-otp">Copy</button>
-    </div>
-  </div>
+
 
   <div class="app-container">
     
@@ -106,7 +99,7 @@
 
         <!-- OTP Verification / Signup Form -->
         <div id="otp-form-section" class="hidden">
-          <p class="otp-instruction">We have sent a verification code to <span id="target-email-display">your email</span>. If you don't have SMTP configured, check the debug banner above or terminal output!</p>
+          <p class="otp-instruction">We have sent a verification code to <span id="target-email-display">your email</span>. Please check your inbox for the OTP.</p>
           <div class="form-group">
             <label for="auth-otp">Enter 6-Digit OTP</label>
             <input type="text" id="auth-otp" placeholder="123456" maxlength="6">

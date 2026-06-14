@@ -6,6 +6,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const path = require('path');
 const fs = require('fs');
+const nodemailer = require('nodemailer');
 const db = require('./database');
 const importer = require('./importer');
 
@@ -21,9 +22,44 @@ app.use(express.static(path.join(__dirname, 'public')));
 // Multer for CSV upload (memory storage is clean and fast)
 const upload = multer({ storage: multer.memoryStorage() });
 
-// In-memory OTP Cache for development/testing
+// In-memory OTP Cache
 const otpCache = {};
-let lastGeneratedOTP = ''; // Debug endpoint store
+
+// Nodemailer SMTP Transporter
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST || 'smtp.gmail.com',
+  port: parseInt(process.env.SMTP_PORT || '587'),
+  secure: process.env.SMTP_PORT === '465', // true for 465, false for other ports
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS
+  }
+});
+
+// Helper to send email OTP
+async function sendOTPEmail(email, otp) {
+  const mailOptions = {
+    from: `"Hisaab Kitaab" <${process.env.SMTP_USER || 'no-reply@hisaab.com'}>`,
+    to: email,
+    subject: 'Your Hisaab Kitaab Verification Code',
+    text: `Hello,\n\nYour 6-digit verification code for Hisaab Kitaab signup is: ${otp}\n\nThis code will expire in 5 minutes.\n\nBest regards,\nThe Hisaab Kitaab Team`,
+    html: `
+      <div style="font-family: 'Nunito', sans-serif; padding: 20px; border: 1px solid #edf2f7; border-radius: 12px; max-width: 500px; margin: 0 auto; background-color: #f7fafc;">
+        <h2 style="color: #5d5bf6; font-family: 'Fredoka', sans-serif; text-align: center; margin-bottom: 20px;">💸 Hisaab Kitaab</h2>
+        <p style="font-size: 1rem; color: #2b2d42;">Hello,</p>
+        <p style="font-size: 1rem; color: #2b2d42;">Your verification code for signing up to Hisaab Kitaab is:</p>
+        <div style="text-align: center; margin: 24px 0;">
+          <span style="font-size: 2.2rem; font-weight: 800; color: #5d5bf6; letter-spacing: 5px; background: white; padding: 10px 24px; border-radius: 8px; border: 2px dashed #5d5bf6;">${otp}</span>
+        </div>
+        <p style="font-size: 0.9rem; color: #6c757d; text-align: center;">This code will expire in 5 minutes.</p>
+        <hr style="border: 0; border-top: 1px solid #edf2f7; margin: 20px 0;">
+        <p style="font-size: 0.8rem; color: #a0aec0; text-align: center;">Hisaab Kitaab App — Splitting expenses made easy, clean, and playful!</p>
+      </div>
+    `
+  };
+
+  await transporter.sendMail(mailOptions);
+}
 
 // --- Exchange Rate Helper ---
 async function getExchangeRate(currency, dateStr) {
@@ -68,10 +104,7 @@ function authenticateToken(req, res, next) {
 // AUTHENTICATION ROUTING
 // ==========================================
 
-// Debug OTP Endpoint for UI slide-in toast
-app.get('/api/auth/debug-otp', (req, res) => {
-  res.json({ otp: lastGeneratedOTP });
-});
+
 
 // Google Login Simulation
 app.post('/api/auth/google-login', async (req, res) => {
@@ -104,7 +137,7 @@ app.post('/api/auth/google-login', async (req, res) => {
 });
 
 // Request Signup OTP
-app.post('/api/auth/signup-otp', (req, res) => {
+app.post('/api/auth/signup-otp', async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'Email is required' });
 
@@ -114,13 +147,14 @@ app.post('/api/auth/signup-otp', (req, res) => {
     otp,
     expires: Date.now() + 5 * 60 * 1000 // 5 minutes validity
   };
-  lastGeneratedOTP = otp;
 
-  console.log(`\n===================================`);
-  console.log(`[OTP Sent to ${email}] -> OTP: ${otp}`);
-  console.log(`===================================\n`);
-
-  res.json({ message: 'OTP sent successfully (Check terminal or UI debug notification!)' });
+  try {
+    await sendOTPEmail(email, otp);
+    res.json({ message: 'Verification OTP sent to your email successfully!' });
+  } catch (err) {
+    console.error('Error sending email:', err);
+    res.status(500).json({ error: 'Failed to send verification email. Please verify SMTP settings in .env.' });
+  }
 });
 
 // Verify OTP

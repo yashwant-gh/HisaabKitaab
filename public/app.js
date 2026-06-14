@@ -114,27 +114,12 @@ async function requestOTP() {
       document.getElementById('otp-form-section').classList.remove('hidden');
       document.getElementById('target-email-display').innerText = email;
       
-      // Auto fetch OTP from debug endpoint for convenience
-      setTimeout(async () => {
-        const debugRes = await fetch(`${API_BASE}/api/auth/debug-otp`);
-        const debugData = await debugRes.json();
-        if (debugData.otp) {
-          document.getElementById('debug-otp-code').innerText = debugData.otp;
-          document.getElementById('debug-otp-banner').classList.remove('hidden');
-        }
-      }, 1000);
     } else {
       alert(data.error);
     }
   } catch (err) {
     alert('Error sending OTP');
   }
-}
-
-function copyDebugOTP() {
-  const otp = document.getElementById('debug-otp-code').innerText;
-  navigator.clipboard.writeText(otp);
-  document.getElementById('auth-otp').value = otp;
 }
 
 // Verify OTP
@@ -180,7 +165,6 @@ async function completeSignup() {
       currentUser = data.user;
       localStorage.setItem('token', token);
       localStorage.setItem('user', JSON.stringify(currentUser));
-      document.getElementById('debug-otp-banner').classList.add('hidden');
       showMainScreen();
     } else {
       alert(data.error);
@@ -222,7 +206,6 @@ function logout() {
   currentUser = null;
   localStorage.removeItem('token');
   localStorage.removeItem('user');
-  document.getElementById('debug-otp-banner').classList.add('hidden');
   showAuthScreen();
 }
 
