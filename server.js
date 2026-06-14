@@ -939,10 +939,19 @@ app.get('/api/groups/:groupId/balances', authenticateToken, async (req, res) => 
       );
     }
 
-    // 3. Compute net balance for each group member
-    // Net = Total Paid (as expense_payer) - Total Share (as split_member) + SettlementsPaid - SettlementsReceived
+    // 3. Compute net balance for EVERY person involved in expenses
+    // IMPORTANT: We initialize balances for group_members AND all names referenced
+    // in expenses (paid_by, split members). This ensures that CSV-imported or virtual
+    // members who are not in group_members still have their debts/credits tracked.
     const balances = {};
-    memberNames.forEach(name => {
+
+    // First pass: collect ALL unique names from expenses
+    const allNamesInExpenses = new Set(memberNames);
+    expenses.forEach(exp => {
+      allNamesInExpenses.add(exp.paid_by);
+      exp.splits.forEach(sp => allNamesInExpenses.add(sp.user_name));
+    });
+    allNamesInExpenses.forEach(name => {
       balances[name] = 0.0;
     });
 

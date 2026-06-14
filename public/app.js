@@ -769,19 +769,48 @@ function updatePerspectiveView() {
     const myPayments = balancesData.payments.filter(pay =>
       pay.from === currentUser.name || pay.to === currentUser.name
     );
+    const fmt = (n) => Math.abs(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     let html = '<div class="debt-simplification-list">';
     if (myPayments.length === 0) {
-      html += '<p>🎉 You have no outstanding debts! You are fully settled.</p>';
+      // Only say "fully settled" if net balance is truly zero
+      if (netBalance > 0.01) {
+        html += `
+          <div class="debt-status-banner" style="background: linear-gradient(135deg, #e8f5e9, #f1f8e9); border: 1px solid #a5d6a7; border-radius: 12px; padding: 18px 20px; margin-bottom: 12px;">
+            <div style="font-size: 1.5rem; margin-bottom: 6px;">💚</div>
+            <div style="font-weight: 700; color: #2e7d32; font-size: 1.05rem;">You are owed ₹${fmt(netBalance)}</div>
+            <div style="color: #558b2f; font-size: 0.85rem; margin-top: 4px;">
+              The people who owe you are listed below. You don't need to pay anyone — wait for them to settle up.
+            </div>
+          </div>`;
+        // Show who owes the user from the payments list (they appear as 'to')
+        // Since backend now tracks all members, there should be entries. If still empty,
+        // show a helpful hint to check the audit trail.
+        html += `<div style="text-align:center; color:#888; padding: 10px;">
+          Check the <strong>Audit Trail</strong> view below for a detailed per-transaction breakdown.
+        </div>`;
+      } else if (netBalance < -0.01) {
+        html += `
+          <div class="debt-status-banner" style="background: linear-gradient(135deg, #fff3e0, #fbe9e7); border: 1px solid #ffab91; border-radius: 12px; padding: 18px 20px; margin-bottom: 12px;">
+            <div style="font-size: 1.5rem; margin-bottom: 6px;">⚠️</div>
+            <div style="font-weight: 700; color: #bf360c; font-size: 1.05rem;">You owe ₹${fmt(netBalance)}</div>
+            <div style="color: #e64a19; font-size: 0.85rem; margin-top: 4px;">
+              Your payment details are loading. Check the Audit Trail for a full breakdown.
+            </div>
+          </div>`;
+      } else {
+        html += '<div style="text-align:center; padding: 20px;"><span style="font-size:2rem;">🎉</span><br><strong style="color: var(--success-color);">You are fully settled!</strong><br><span style="color:#888; font-size:0.85rem;">No outstanding debts with anyone in this group.</span></div>';
+      }
     } else {
       myPayments.forEach(pay => {
         const isFromMe = pay.from === currentUser.name;
         const highlights = isFromMe ? 'color: var(--error-color)' : 'color: var(--success-color)';
+        const icon = isFromMe ? '🔴' : '💚';
         const label = isFromMe
           ? `You owe <strong>${pay.to}</strong>`
           : `<strong>${pay.from}</strong> owes you`;
         html += `
           <div class="debt-item">
-            <span class="names">${pay.from} ➔ ${pay.to}</span>
+            <span class="names">${icon} ${pay.from} ➔ ${pay.to}</span>
             <span class="debt-label" style="font-size:0.75rem; color:#888; margin-left:8px;">${label}</span>
             <span class="amount" style="${highlights}">₹${pay.amount.toFixed(2)}</span>
           </div>`;
