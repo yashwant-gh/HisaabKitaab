@@ -106,36 +106,6 @@ function authenticateToken(req, res, next) {
 
 
 
-// Google Login Simulation
-app.post('/api/auth/google-login', async (req, res) => {
-  const { name } = req.body;
-  if (!name) return res.status(400).json({ error: 'Member name is required' });
-
-  try {
-    // Check if user exists
-    let users = await db.query(`SELECT * FROM users WHERE name = ?`, [name]);
-    let user;
-
-    if (users.length === 0) {
-      // Auto-create Google user if they don't exist
-      const email = `${name.toLowerCase()}@hisaab.com`;
-      const avatarUrl = `https://api.dicebear.com/7.x/adventurer/svg?seed=${name}`;
-      const result = await db.run(
-        `INSERT INTO users (name, email, password_hash, avatar_url) VALUES (?, ?, NULL, ?)`,
-        [name, email, avatarUrl]
-      );
-      user = { id: result.lastID, name, email, avatar_url: avatarUrl };
-    } else {
-      user = users[0];
-    }
-
-    const token = jwt.sign({ id: user.id, name: user.name, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
-    res.json({ token, user: { id: user.id, name: user.name, email: user.email, avatar_url: user.avatar_url } });
-  } catch (err) {
-    res.status(500).json({ error: 'Internal server error during Google Sign-in' });
-  }
-});
-
 // Request Signup OTP
 app.post('/api/auth/signup-otp', async (req, res) => {
   const { email } = req.body;

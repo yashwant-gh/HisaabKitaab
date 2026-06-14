@@ -27,25 +27,8 @@
         <p>Splitting expenses made easy, clean, and playful!</p>
       </div>
 
-      <!-- Tab Buttons for Auth -->
-      <div class="auth-tabs">
-        <button id="tab-google" class="auth-tab-btn active" onclick="switchAuthTab('google')">Simulated Google OAuth</button>
-        <button id="tab-email" class="auth-tab-btn" onclick="switchAuthTab('email')">Email Verification / Signup</button>
-      </div>
-
-      <!-- Google Mock Section -->
-      <div id="google-auth-section" class="auth-section">
-        <h3>Simulated Google Sign-in</h3>
-        <p class="subtitle">Enter any name to instantly simulate a Google OAuth login:</p>
-        <div class="form-group mt-3">
-          <label for="google-name-input">Google User Name</label>
-          <input type="text" id="google-name-input" placeholder="e.g. Aisha, Rohan, or any custom name">
-        </div>
-        <button class="btn btn-primary w-100" onclick="loginAsGoogleSimulated()">Sign In with Google</button>
-      </div>
-
       <!-- Email Login/Signup Section -->
-      <div id="email-auth-section" class="auth-section hidden">
+      <div id="email-auth-section" class="auth-section">
         <div id="email-initial-form">
           <div class="form-group">
             <label for="auth-email">Email Address</label>

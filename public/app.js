@@ -280,43 +280,6 @@ async function submitInvitation(event) {
 }
 
 // --- AUTHENTICATION ---
-function switchAuthTab(type) {
-  document.getElementById('tab-google').classList.toggle('active', type === 'google');
-  document.getElementById('tab-email').classList.toggle('active', type === 'email');
-  
-  document.getElementById('google-auth-section').classList.toggle('hidden', type !== 'google');
-  document.getElementById('email-auth-section').classList.toggle('hidden', type !== 'email');
-}
-
-// Social Google Login Simulation
-async function loginAsGoogleSimulated() {
-  const name = document.getElementById('google-name-input').value.trim();
-  if (!name) return alert('Please enter a name');
-  await loginAsGoogle(name);
-}
-
-async function loginAsGoogle(name) {
-  try {
-    const res = await fetch(`${API_BASE}/api/auth/google-login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name })
-    });
-    const data = await res.json();
-    if (res.ok) {
-      token = data.token;
-      currentUser = data.user;
-      localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(currentUser));
-      showMainScreen();
-    } else {
-      alert(data.error || 'Google login failed');
-    }
-  } catch (err) {
-    console.error(err);
-    alert('Failed to connect to backend');
-  }
-}
 
 // Request Email OTP
 async function requestOTP() {
