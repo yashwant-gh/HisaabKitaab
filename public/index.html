@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hisaab Kitaab - Shared Expense Tracker</title>
+  <!-- Google Fonts for Playful & Clean UI -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@300..700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <!-- Chart.js for beautiful graphs -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Vanilla CSS Stylesheet -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- Top Global Debug Banner for OTP verification (No SMTP account needed!) -->
+  <div id="debug-otp-banner" class="debug-otp-banner hidden">
+    <div class="debug-content">
+      <span class="debug-icon">🛠️ Dev Tool:</span>
+      <span>Last generated OTP is: <strong id="debug-otp-code">------</strong></span>
+      <button onclick="copyDebugOTP()" class="btn-copy-otp">Copy</button>
+    </div>
+  </div>
+
+  <div class="app-container">
+    
+    <!-- AUTHENTICATION SCREEN -->
+    <div id="auth-screen" class="auth-card">
+      <div class="auth-header">
+        <div class="logo-circle">💸</div>
+        <h1>Hisaab Kitaab</h1>
+        <p>Splitting expenses made easy, clean, and playful!</p>
+      </div>
+
+      <!-- Tab Buttons for Auth -->
+      <div class="auth-tabs">
+        <button id="tab-google" class="auth-tab-btn active" onclick="switchAuthTab('google')">Google Sign-in</button>
+        <button id="tab-email" class="auth-tab-btn" onclick="switchAuthTab('email')">Email Login/OTP</button>
+      </div>
+
+      <!-- Google Mock Section -->
+      <div id="google-auth-section" class="auth-section">
+        <h3>Select flatmate to instantly log in:</h3>
+        <p class="subtitle">Quickly test the app from their unique perspective!</p>
+        <div class="google-users-grid">
+          <div class="google-user-card" onclick="loginAsGoogle('Aisha')">
+            <img src="https://api.dicebear.com/7.x/adventurer/svg?seed=Aisha" alt="Aisha">
+            <h4>Aisha</h4>
+            <span>“Just want one number”</span>
+          </div>
+          <div class="google-user-card" onclick="loginAsGoogle('Rohan')">
+            <img src="https://api.dicebear.com/7.x/adventurer/svg?seed=Rohan" alt="Rohan">
+            <h4>Rohan</h4>
+            <span>“No magic numbers”</span>
+          </div>
+          <div class="google-user-card" onclick="loginAsGoogle('Priya')">
+            <img src="https://api.dicebear.com/7.x/adventurer/svg?seed=Priya" alt="Priya">
+            <h4>Priya</h4>
+            <span>“Dollars vs Rupees”</span>
+          </div>
+          <div class="google-user-card" onclick="loginAsGoogle('Meera')">
+            <img src="https://api.dicebear.com/7.x/adventurer/svg?seed=Meera" alt="Meera">
+            <h4>Meera</h4>
+            <span>“Clean duplicates”</span>
+          </div>
+          <div class="google-user-card" onclick="loginAsGoogle('Sam')">
+            <img src="https://api.dicebear.com/7.x/adventurer/svg?seed=Sam" alt="Sam">
+            <h4>Sam</h4>
+            <span>“March electricity?”</span>
+          </div>
+          <div class="google-user-card" onclick="loginAsGoogle('Dev')">
+            <img src="https://api.dicebear.com/7.x/adventurer/svg?seed=Dev" alt="Dev">
+            <h4>Dev</h4>
+            <span>“Goa trip guest”</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Email Login/Signup Section -->
+      <div id="email-auth-section" class="auth-section hidden">
+        <div id="email-initial-form">
+          <div class="form-group">
+            <label for="auth-email">Email Address</label>
+            <input type="email" id="auth-email" placeholder="e.g. rohan@hisaab.com">
+          </div>
+          
+          <div class="form-actions-row">
+            <button class="btn btn-primary" onclick="requestOTP()">Send OTP & Proceed</button>
+          </div>
+          <div class="divider"><span>OR</span></div>
+          
+          <!-- Direct Email/Password Login -->
+          <h3>Log in with password:</h3>
+          <div class="form-group">
+            <label for="login-email">Email</label>
+            <input type="email" id="login-email" placeholder="email@hisaab.com">
+          </div>
+          <div class="form-group">
+            <label for="login-password">Password</label>
+            <input type="password" id="login-password" placeholder="password123">
+          </div>
+          <button class="btn btn-secondary w-100" onclick="loginWithPassword()">Log In</button>
+        </div>
+
+        <!-- OTP Verification / Signup Form -->
+        <div id="otp-form-section" class="hidden">
+          <p class="otp-instruction">We have sent a verification code to <span id="target-email-display">your email</span>. If you don't have SMTP configured, check the debug banner above or terminal output!</p>
+          <div class="form-group">
+            <label for="auth-otp">Enter 6-Digit OTP</label>
+            <input type="text" id="auth-otp" placeholder="123456" maxlength="6">
+          </div>
+          <button class="btn btn-primary w-100" onclick="verifyOTP()">Verify OTP</button>
+          
+          <div id="signup-details-section" class="hidden mt-3">
+            <hr class="my-3">
+            <h3>Complete Registration</h3>
+            <div class="form-group">
+              <label for="signup-name">Your Name</label>
+              <select id="signup-name">
+                <option value="Aisha">Aisha</option>
+                <option value="Rohan">Rohan</option>
+                <option value="Priya">Priya</option>
+                <option value="Meera">Meera</option>
+                <option value="Sam">Sam</option>
+                <option value="Dev">Dev</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="signup-password">Choose Password</label>
+              <input type="password" id="signup-password" placeholder="Min 6 characters">
+            </div>
+            <button class="btn btn-success w-100" onclick="completeSignup()">Register & Login</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN APP SCREEN -->
+    <div id="main-screen" class="main-layout hidden">
+      
+      <!-- HEADER BAR -->
+      <header class="app-header">
+        <div class="header-logo">
+          <span class="logo-emoji">🐷</span>
+          <div class="logo-text">
+            <h2>Hisaab Kitaab</h2>
+            <p>Group: <strong id="current-group-name">Cozy Flat</strong></p>
+          </div>
+        </div>
+        
+        <div class="header-controls">
+          <!-- Multi-Perspective Dropdown Selector (CRITICAL USER REQUIREMENT) -->
+          <div class="perspective-box">
+            <label for="perspective-dropdown">🔍 View Perspective:</label>
+            <select id="perspective-dropdown" onchange="changePerspective()">
+              <option value="Aisha">Aisha (Simplified Debts)</option>
+              <option value="Rohan">Rohan (Itemized Audit Ledger)</option>
+              <option value="Priya">Priya (Multi-currency conversions)</option>
+              <option value="Meera">Meera (Clean-up CSV & Approvals)</option>
+              <option value="Sam">Sam (Timeline constraints)</option>
+              <option value="Dev">Dev (Goa trip calculations)</option>
+              <option value="Kabir">Kabir (Goa parasailing day guest)</option>
+            </select>
+          </div>
+          
+          <!-- User info -->
+          <div class="user-pill">
+            <img id="user-avatar" src="" alt="avatar">
+            <span id="user-display-name">Guest</span>
+            <button class="btn-logout" onclick="logout()" title="Logout">🚪</button>
+          </div>
+        </div>
+      </header>
+
+      <!-- NAVIGATION TABS -->
+      <nav class="nav-tabs">
+        <button id="nav-btn-dashboard" class="tab-btn active" onclick="switchTab('dashboard')">📊 Dashboard</button>
+        <button id="nav-btn-expenses" class="tab-btn" onclick="switchTab('expenses')">💸 Expenses List</button>
+        <button id="nav-btn-add" class="tab-btn" onclick="switchTab('add')">➕ Add Expense</button>
+        <button id="nav-btn-import" class="tab-btn" onclick="switchTab('import')">📥 Import CSV</button>
+        <button id="nav-btn-members" class="tab-btn" onclick="switchTab('members')">👥 Group Members</button>
+      </nav>
+
+      <!-- CONTENT PANELS -->
+      <main class="content-panel">
+        
+        <!-- DASHBOARD TAB -->
+        <section id="panel-dashboard" class="tab-content">
+          
+          <!-- Perspective Info Banner (Dynamic styling depending on user request) -->
+          <div class="perspective-info-card" id="perspective-info-banner">
+            <div class="avatar-large"><img id="perspective-avatar" src="" alt="Avatar"></div>
+            <div class="perspective-text">
+              <h3 id="perspective-title">Viewing as Rohan</h3>
+              <p id="perspective-subtitle">"Rohan requested no magic numbers - he wants to see exactly how his balance is computed."</p>
+            </div>
+          </div>
+
+          <!-- Quick Balance cards -->
+          <div class="dashboard-grid">
+            
+            <div class="dashboard-card summary-card balance-card">
+              <div class="card-icon">💳</div>
+              <h3>Net Balance</h3>
+              <p class="balance-amount positive" id="dashboard-net-balance">₹0.00</p>
+              <span class="sub-label" id="dashboard-net-balance-label">You are owed</span>
+            </div>
+
+            <!-- Dynamic Perspective-Specific Content Card -->
+            <div class="dashboard-card summary-card dynamic-card">
+              <div class="card-icon">🧠</div>
+              <h3 id="perspective-card-title">Aisha's Perspective (Simplified Debts)</h3>
+              <div id="perspective-dynamic-content" class="dynamic-content-box">
+                <!-- Content generated via JavaScript -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Chart Visuals Section -->
+          <div class="chart-container dashboard-card">
+            <h3>📈 Monthly Expenses Overview</h3>
+            <div class="chart-wrapper">
+              <canvas id="monthlyChart"></canvas>
+            </div>
+          </div>
+
+          <!-- Detailed Balance Audit Section (Rohan's Requirement) -->
+          <div class="dashboard-card audit-trail-card" id="audit-trail-container">
+            <div class="audit-header">
+              <h3>🔍 Itemized Audit Breakdown: <span id="audit-username">Rohan</span></h3>
+              <span class="badge badge-info" id="audit-count">0 items</span>
+            </div>
+            <p class="help-text">Shows every expense the member paid or split, proving their net balance with zero magic numbers.</p>
+            
+            <div class="table-responsive">
+              <table class="audit-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Description</th>
+                    <th>Payer</th>
+                    <th>Expense Total</th>
+                    <th>Your Share</th>
+                    <th>Your Payment</th>
+                    <th>Net Impact</th>
+                    <th>Running Total</th>
+                  </tr>
+                </thead>
+                <tbody id="audit-trail-rows">
+                  <!-- JS generated -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </section>
+
+        <!-- EXPENSES LIST TAB -->
+        <section id="panel-expenses" class="tab-content hidden">
+          <div class="dashboard-card">
+            <div class="card-header-row">
+              <h3>Expense History</h3>
+              <button class="btn btn-secondary" onclick="switchTab('add')">➕ New Expense</button>
+            </div>
+            
+            <div class="filter-row">
+              <input type="text" id="expense-search" placeholder="Search description..." onkeyup="filterExpenses()">
+              <select id="expense-currency-filter" onchange="filterExpenses()">
+                <option value="all">All Currencies</option>
+                <option value="INR">INR only</option>
+                <option value="USD">USD only</option>
+              </select>
+            </div>
+
+            <div class="expense-list-container" id="expense-list">
+              <!-- JS Generated List of Expenses -->
+            </div>
+          </div>
+        </section>
+
+        <!-- ADD EXPENSE TAB -->
+        <section id="panel-add" class="tab-content hidden">
+          <div class="dashboard-card max-width-600">
+            <h3>Add New Expense / Settlement</h3>
+            
+            <div class="type-toggle-row">
+              <button id="btn-type-expense" class="toggle-btn active" onclick="setExpenseFormType(false)">🛒 Standard Expense</button>
+              <button id="btn-type-settlement" class="toggle-btn" onclick="setExpenseFormType(true)">🤝 Debt Settlement / Payment</button>
+            </div>
+
+            <form id="expense-form" onsubmit="submitExpense(event)">
+              <input type="hidden" id="form-is-settlement" value="0">
+              
+              <div class="form-group">
+                <label for="form-desc" id="lbl-form-desc">Description</label>
+                <input type="text" id="form-desc" placeholder="e.g. WiFi Bill March" required>
+              </div>
+
+              <div class="form-row-2">
+                <div class="form-group">
+                  <label for="form-paid-by">Paid By</label>
+                  <select id="form-paid-by" onchange="onPayerChange()"></select>
+                </div>
+                
+                <div class="form-group">
+                  <label for="form-date">Date</label>
+                  <input type="date" id="form-date" required>
+                </div>
+              </div>
+
+              <div class="form-row-2">
+                <div class="form-group">
+                  <label for="form-amount">Amount</label>
+                  <input type="number" id="form-amount" step="0.01" placeholder="0.00" required>
+                </div>
+                
+                <div class="form-group">
+                  <label for="form-currency">Currency</label>
+                  <select id="form-currency" onchange="updateExchangeRatePreview()">
+                    <option value="INR">INR (₹)</option>
+                    <option value="USD">USD ($)</option>
+                    <option value="EUR">EUR (€)</option>
+                    <option value="GBP">GBP (£)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div id="exchange-rate-preview" class="exchange-preview hidden">
+                <span>Estimated Exchange Rate: <strong id="exchange-rate-val">1.0</strong> INR. Converted Total: <strong id="exchange-converted-val">₹0.00</strong></span>
+              </div>
+
+              <!-- Splits configuration section (Only shown for expenses) -->
+              <div id="splits-configuration-section">
+                <div class="form-group">
+                  <label for="form-split-type">Split Logic</label>
+                  <select id="form-split-type" onchange="adjustSplitInputs()">
+                    <option value="equal">Split Equally</option>
+                    <option value="unequal">Split Unequally (Exact Amounts)</option>
+                    <option value="share">Split by Shares (Ratios)</option>
+                    <option value="percentage">Split by Percentages (%)</option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label>Split Among Group Members:</label>
+                  <div class="split-members-list" id="split-inputs-container">
+                    <!-- Dynamic inputs based on group members and split type -->
+                  </div>
+                </div>
+              </div>
+
+              <!-- Settlement-specific receiver (only shown for settlements) -->
+              <div id="settlement-configuration-section" class="hidden">
+                <div class="form-group">
+                  <label for="form-settlement-to">Received By (Recipient)</label>
+                  <select id="form-settlement-to"></select>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="form-notes">Notes</label>
+                <textarea id="form-notes" placeholder="Optional details..."></textarea>
+              </div>
+
+              <button type="submit" class="btn btn-primary w-100 py-3 mt-3">💾 Save Transaction</button>
+            </form>
+          </div>
+        </section>
+
+        <!-- IMPORT CSV WIZARD (MEERA'S CLEANUP AREA) -->
+        <section id="panel-import" class="tab-content hidden">
+          <div class="dashboard-card">
+            <h3>📥 CSV Expense Import Wizard</h3>
+            <p>Upload a spreadsheet export to automatically parse, clean up errors, merge duplicates, and import historical logs.</p>
+            
+            <!-- Step 1: Upload -->
+            <div id="import-step-upload" class="import-step-panel">
+              <div class="upload-drop-zone" onclick="triggerFileInput()">
+                <div class="upload-icon">📂</div>
+                <h4>Drag & Drop or Click to Upload CSV</h4>
+                <p>Accepted formats: <code>Expenses Export.csv</code></p>
+                <input type="file" id="csv-file-input" class="hidden" accept=".csv" onchange="handleFileSelected()">
+              </div>
+              <div class="alternative-import mt-3 text-center">
+                <button class="btn btn-secondary" onclick="loadDefaultCSV()">⚡ Quick Auto-Load Workspace "Expenses Export.csv"</button>
+              </div>
+            </div>
+
+            <!-- Step 2: Clean and Review Wizard (Meera's Delight) -->
+            <div id="import-step-wizard" class="import-step-panel hidden">
+              
+              <!-- Issues List Header -->
+              <div class="wizard-header-status">
+                <div class="status-badge error" id="wizard-issue-badge">⚠️ 0 Anomaly Items Detected</div>
+                <h4>Interactive Cleanup Wizard</h4>
+                <p>Review the errors found in the spreadsheet below. Check the action you want to execute for each, then approve the final cleaned import.</p>
+              </div>
+
+              <!-- Issues List Container -->
+              <div class="issues-list" id="wizard-issues-container">
+                <!-- Javascript will generate structured cleanup items -->
+              </div>
+
+              <!-- Action Bar -->
+              <div class="wizard-actions-bar mt-4">
+                <button class="btn btn-outline" onclick="resetImport()">❌ Cancel Import</button>
+                <button class="btn btn-success" id="btn-confirm-import" onclick="executeFinalImport()">✅ Approve Cleanup & Import Rows</button>
+              </div>
+            </div>
+
+            <!-- Step 3: Success Screen -->
+            <div id="import-step-success" class="import-step-panel hidden text-center py-5">
+              <div class="success-icon animate-bounce">🎉</div>
+              <h2>CSV Import Complete!</h2>
+              <p id="import-success-message">Successfully parsed and uploaded clean historical records.</p>
+              <button class="btn btn-primary mt-4" onclick="switchTab('dashboard')">Go to Dashboard</button>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- GROUP MEMBERS TAB -->
+        <section id="panel-members" class="tab-content hidden">
+          <div class="dashboard-card">
+            <div class="card-header-row">
+              <h3>Group Members & Timeline Limits</h3>
+              <button class="btn btn-primary" onclick="showAddMemberForm()">👤 Add Member</button>
+            </div>
+            <p class="help-text">Membership periods restrict split calculations to active dates, ensuring new members (like Sam) aren't charged for pre-join events.</p>
+
+            <div class="member-add-form-box hidden" id="member-add-form-container">
+              <h4>Update Group Member Period</h4>
+              <form id="member-form" onsubmit="submitMember(event)">
+                <div class="form-group">
+                  <label for="member-name">Member Name</label>
+                  <input type="text" id="member-name" placeholder="e.g. Sam" required>
+                </div>
+                <div class="form-row-2">
+                  <div class="form-group">
+                    <label for="member-joined">Joined Group Date</label>
+                    <input type="date" id="member-joined" required>
+                  </div>
+                  <div class="form-group">
+                    <label for="member-left">Left Group Date</label>
+                    <input type="date" id="member-left" placeholder="Leave blank if active">
+                  </div>
+                </div>
+                <div class="form-actions-row">
+                  <button type="button" class="btn btn-secondary" onclick="hideAddMemberForm()">Cancel</button>
+                  <button type="submit" class="btn btn-success">Save Member Period</button>
+                </div>
+              </form>
+            </div>
+
+            <div class="members-grid-container" id="members-list-grid">
+              <!-- JS Generated Members grid -->
+            </div>
+          </div>
+        </section>
+
+      </main>
+
+      <footer class="app-footer-text">
+        <p>Hisaab Kitaab App — Built with ❤️ for Aisha, Rohan, Priya, Meera, and Sam.</p>
+      </footer>
+    </div>
+
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

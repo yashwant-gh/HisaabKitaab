@@ -1,0 +1,7 @@
+node_modules
+hisaab.db
+.env
+temp_upload.csv
+.system_generated
+.gemini
+package-lock.json
