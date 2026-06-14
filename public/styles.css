@@ -224,6 +224,9 @@ body {
 .btn-success:hover { background: var(--success-hover); transform: translateY(-2px); }
 .btn-outline { background: white; border: 2px solid #e2e8f0; color: var(--text-muted); }
 .btn-outline:hover { border-color: var(--text-dark); color: var(--text-dark); }
+.btn-danger { background: var(--error-color); color: white; }
+.btn-danger:hover { background: #e03b5a; transform: translateY(-2px); }
+.btn-sm { padding: 6px 12px; font-size: 0.85rem; border-radius: var(--border-radius-sm); }
 
 /* Debug OTP Banner */
 .debug-otp-banner {

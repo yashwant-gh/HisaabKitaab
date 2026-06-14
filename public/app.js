@@ -1189,14 +1189,47 @@ function renderMembersGrid() {
   membersList.forEach(m => {
     const avatarUrl = `https://api.dicebear.com/7.x/adventurer/svg?seed=${m.user_name}`;
     const leftText = m.left_at ? `Left: ${m.left_at}` : 'Active Member';
+    const isMe = currentUser && m.user_name.toLowerCase() === currentUser.name.toLowerCase();
+    
+    const removeButton = isMe ? '' : `
+      <button class="btn btn-danger btn-sm mt-3 w-100" onclick="removeGroupMember('${m.user_name}')">
+        Remove Member
+      </button>
+    `;
+
     container.innerHTML += `
       <div class="member-timeline-card">
         <img src="${avatarUrl}" alt="Avatar">
         <h4>${m.user_name}</h4>
         <span class="date-range">Joined: ${m.joined_at}</span><br>
         <span class="badge ${m.left_at ? 'badge-warning' : 'badge-success'} mt-2">${leftText}</span>
+        ${removeButton}
       </div>`;
   });
+}
+
+async function removeGroupMember(userName) {
+  if (!confirm(`Are you sure you want to remove ${userName} from this group?`)) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/groups/${currentGroupId}/members/${encodeURIComponent(userName)}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    const data = await res.json();
+    if (res.ok) {
+      alert(data.message || 'Member removed successfully.');
+      refreshData();
+    } else {
+      alert(data.error || 'Failed to remove member.');
+    }
+  } catch (err) {
+    console.error(err);
+    alert('Error removing member.');
+  }
 }
 
 function showAddMemberForm() {

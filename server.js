@@ -485,6 +485,15 @@ app.get('/api/groups/:id', authenticateToken, async (req, res) => {
     const group = await db.query(`SELECT * FROM groups WHERE id = ?`, [req.params.id]);
     if (group.length === 0) return res.status(404).json({ error: 'Group not found' });
 
+    // Check if requester is a member of the group
+    const memberships = await db.query(
+      `SELECT * FROM group_members WHERE group_id = ? AND user_name = ?`,
+      [req.params.id, req.user.name]
+    );
+    if (memberships.length === 0) {
+      return res.status(403).json({ error: 'Forbidden: You are not a member of this group' });
+    }
+
     const members = await db.query(
       `SELECT * FROM group_members WHERE group_id = ? ORDER BY joined_at ASC`,
       [req.params.id]
@@ -527,6 +536,15 @@ app.post('/api/groups/:id/members', authenticateToken, async (req, res) => {
   if (!user_name || !joined_at) return res.status(400).json({ error: 'Member name and join date are required' });
 
   try {
+    // Check if the requester is a member of the group
+    const requesterMemberships = await db.query(
+      `SELECT * FROM group_members WHERE group_id = ? AND user_name = ?`,
+      [req.params.id, req.user.name]
+    );
+    if (requesterMemberships.length === 0) {
+      return res.status(403).json({ error: 'Forbidden: You are not a member of this group' });
+    }
+
     // Create placeholder user if doesn't exist
     const userExist = await db.query(`SELECT * FROM users WHERE name = ?`, [user_name]);
     if (userExist.length === 0) {
@@ -559,6 +577,36 @@ app.post('/api/groups/:id/members', authenticateToken, async (req, res) => {
     res.json({ message: 'Group membership updated successfully' });
   } catch (err) {
     res.status(500).json({ error: 'Failed to update member' });
+  }
+});
+
+// Remove a member from the group
+app.delete('/api/groups/:groupId/members/:userName', authenticateToken, async (req, res) => {
+  const { groupId, userName } = req.params;
+  try {
+    // Check if the requester is a member of the group
+    const requesterMemberships = await db.query(
+      `SELECT * FROM group_members WHERE group_id = ? AND user_name = ?`,
+      [groupId, req.user.name]
+    );
+    if (requesterMemberships.length === 0) {
+      return res.status(403).json({ error: 'Forbidden: You are not a member of this group' });
+    }
+
+    // Delete membership
+    const result = await db.run(
+      `DELETE FROM group_members WHERE group_id = ? AND user_name = ?`,
+      [groupId, userName]
+    );
+
+    if (result.changes === 0) {
+      return res.status(404).json({ error: 'Member not found in this group' });
+    }
+
+    res.json({ message: `Member '${userName}' removed successfully.` });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to remove member' });
   }
 });
 
@@ -614,6 +662,15 @@ app.get('/api/groups/:groupId/expenses', authenticateToken, async (req, res) => 
 // Delete an expense
 app.delete('/api/groups/:groupId/expenses/:expenseId', authenticateToken, async (req, res) => {
   try {
+    // Check if the requester is a member of the group
+    const memberships = await db.query(
+      `SELECT * FROM group_members WHERE group_id = ? AND user_name = ?`,
+      [req.params.groupId, req.user.name]
+    );
+    if (memberships.length === 0) {
+      return res.status(403).json({ error: 'Forbidden: You are not a member of this group' });
+    }
+
     await db.run(`DELETE FROM expenses WHERE id = ? AND group_id = ?`, [req.params.expenseId, req.params.groupId]);
     res.json({ message: 'Expense deleted successfully' });
   } catch (err) {
@@ -640,6 +697,14 @@ app.post('/api/groups/:groupId/expenses', authenticateToken, async (req, res) =>
   }
 
   try {
+    // Check if the requester is a member of the group
+    const memberships = await db.query(
+      `SELECT * FROM group_members WHERE group_id = ? AND user_name = ?`,
+      [req.params.groupId, req.user.name]
+    );
+    if (memberships.length === 0) {
+      return res.status(403).json({ error: 'Forbidden: You are not a member of this group' });
+    }
     const exchangeRate = await getExchangeRate(currency, date);
     const amountInr = amount * exchangeRate;
 
@@ -714,6 +779,15 @@ app.post('/api/groups/:groupId/expenses', authenticateToken, async (req, res) =>
 app.get('/api/groups/:groupId/balances', authenticateToken, async (req, res) => {
   const groupId = req.params.groupId;
   try {
+    // Check if the requester is a member of the group
+    const memberships = await db.query(
+      `SELECT * FROM group_members WHERE group_id = ? AND user_name = ?`,
+      [groupId, req.user.name]
+    );
+    if (memberships.length === 0) {
+      return res.status(403).json({ error: 'Forbidden: You are not a member of this group' });
+    }
+
     // 1. Fetch group members
     const members = await db.query(`SELECT * FROM group_members WHERE group_id = ?`, [groupId]);
     const memberNames = members.map(m => m.user_name);
@@ -936,6 +1010,15 @@ app.post('/api/import/confirm', authenticateToken, async (req, res) => {
   }
 
   try {
+    // Check if the requester is a member of the group
+    const memberships = await db.query(
+      `SELECT * FROM group_members WHERE group_id = ? AND user_name = ?`,
+      [groupId, req.user.name]
+    );
+    if (memberships.length === 0) {
+      return res.status(403).json({ error: 'Forbidden: You are not a member of this group' });
+    }
+
     await db.run('BEGIN TRANSACTION');
 
     for (const exp of expenses) {
