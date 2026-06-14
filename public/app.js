@@ -259,7 +259,14 @@ async function submitInvitation(event) {
       },
       body: JSON.stringify({ email })
     });
-    const data = await res.json();
+    
+    let data;
+    try {
+      data = await res.json();
+    } catch (e) {
+      data = { error: 'Server returned an invalid response. Please verify the server is running.' };
+    }
+    
     if (res.ok) {
       alert(data.message || 'Invitation sent successfully!');
       document.getElementById('invite-email').value = '';
@@ -268,7 +275,7 @@ async function submitInvitation(event) {
       alert(data.error || 'Failed to send invitation');
     }
   } catch (err) {
-    alert('Error sending invitation');
+    alert('Error sending invitation: ' + err.message);
   }
 }
 
