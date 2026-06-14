@@ -25,6 +25,9 @@ document.addEventListener('DOMContentLoaded', () => {
     showAuthScreen();
   }
   
+  // Load Google Client configuration securely
+  loadGoogleConfig();
+  
   // Set up forms and triggers
   updateExchangeRatePreview();
 });
@@ -280,6 +283,96 @@ async function submitInvitation(event) {
 }
 
 // --- AUTHENTICATION ---
+function switchAuthTab(type) {
+  const isGoogle = type === 'google';
+  const googleBtn = document.getElementById('tab-google');
+  const emailBtn = document.getElementById('tab-email');
+  const googleSection = document.getElementById('google-auth-section');
+  const emailSection = document.getElementById('email-auth-section');
+  
+  if (googleBtn) googleBtn.classList.toggle('active', isGoogle);
+  if (emailBtn) emailBtn.classList.toggle('active', !isGoogle);
+  if (googleSection) googleSection.classList.toggle('hidden', !isGoogle);
+  if (emailSection) emailSection.classList.toggle('hidden', isGoogle);
+}
+
+// Secure Google Authentication Flow
+let googleClientId = '';
+async function loadGoogleConfig() {
+  try {
+    const res = await fetch('/api/auth/google-config');
+    const data = await res.json();
+    googleClientId = data.clientId;
+    if (googleClientId) {
+      initializeGoogleSignIn();
+    } else {
+      renderGoogleWarning();
+    }
+  } catch (err) {
+    console.error('Failed to load Google OAuth config:', err);
+  }
+}
+
+function initializeGoogleSignIn() {
+  if (typeof google === 'undefined') {
+    // Retry loading once the SDK loads
+    setTimeout(initializeGoogleSignIn, 500);
+    return;
+  }
+  
+  google.accounts.id.initialize({
+    client_id: googleClientId,
+    callback: handleCredentialResponse
+  });
+  
+  const container = document.getElementById("google-signin-button-container");
+  if (container) {
+    container.innerHTML = ''; // Clear prior message
+    google.accounts.id.renderButton(
+      container,
+      { theme: "outline", size: "large", width: "320" }
+    );
+  }
+}
+
+async function handleCredentialResponse(response) {
+  const idToken = response.credential;
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/google-login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ idToken })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      token = data.token;
+      currentUser = data.user;
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(currentUser));
+      showMainScreen();
+    } else {
+      alert(data.error || 'Google Login verification failed');
+    }
+  } catch (err) {
+    alert('Failed to connect to backend for Google sign-in');
+  }
+}
+
+function renderGoogleWarning() {
+  const container = document.getElementById("google-signin-button-container");
+  if (container) {
+    container.innerHTML = `
+      <div class="alert alert-warning" style="text-align: left; font-size: 0.95rem; padding: 15px; border-radius: var(--border-radius-md); background: #fff8e1; border: 1px solid #ffe082; color: #5d4037; max-width: 480px; margin: 0 auto; line-height: 1.5;">
+        <strong>⚠️ Google Client ID not configured!</strong><br>
+        To enable secure Google login, follow these quick steps:<br>
+        1. Set up credentials in the <a href="https://console.cloud.google.com/" target="_blank" style="color: var(--primary-color); font-weight: bold; text-decoration: underline;">Google Cloud Console</a>.<br>
+        2. Set Authorized Javascript Origins to: <code>http://localhost:3000</code>.<br>
+        3. Add the Client ID to your <code>.env</code> file:
+        <pre style="margin-top: 5px; background: rgba(0,0,0,0.05); padding: 6px; border-radius: var(--border-radius-sm); font-size: 0.8rem; overflow-x: auto;">GOOGLE_CLIENT_ID=your-google-client-id-here</pre>
+        4. Restart the node server process.
+      </div>`;
+  }
+}
 
 // Request Email OTP
 async function requestOTP() {

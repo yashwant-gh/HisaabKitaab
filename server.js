@@ -100,11 +100,72 @@ function authenticateToken(req, res, next) {
   });
 }
 
-// ==========================================
-// AUTHENTICATION ROUTING
-// ==========================================
+// Google Config Endpoint
+app.get('/api/auth/google-config', (req, res) => {
+  res.json({ clientId: process.env.GOOGLE_CLIENT_ID || '' });
+});
 
+// Google Login Endpoint (Secure verification)
+app.post('/api/auth/google-login', async (req, res) => {
+  const { idToken } = req.body;
+  if (!idToken) return res.status(400).json({ error: 'ID Token is required' });
 
+  try {
+    // Verify ID Token via Google's tokeninfo API
+    const googleRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${idToken}`);
+    if (!googleRes.ok) {
+      return res.status(400).json({ error: 'Invalid Google ID Token' });
+    }
+
+    const payload = await googleRes.json();
+    
+    // Verify issuer
+    const issuer = payload.iss;
+    if (issuer !== 'accounts.google.com' && issuer !== 'https://accounts.google.com') {
+      return res.status(400).json({ error: 'Invalid issuer' });
+    }
+
+    // Verify audience if client ID is set
+    if (process.env.GOOGLE_CLIENT_ID && payload.aud !== process.env.GOOGLE_CLIENT_ID) {
+      return res.status(400).json({ error: 'Client ID mismatch (audience)' });
+    }
+
+    const email = payload.email.trim().toLowerCase();
+    const name = payload.name;
+    const avatarUrl = payload.picture || `https://api.dicebear.com/7.x/adventurer/svg?seed=${name}`;
+
+    // Find or create user
+    let users = await db.query(`SELECT * FROM users WHERE email = ?`, [email]);
+    let user;
+
+    if (users.length === 0) {
+      // Create user automatically
+      const result = await db.run(
+        `INSERT INTO users (name, email, password_hash, avatar_url) VALUES (?, ?, NULL, ?)`,
+        [name, email, avatarUrl]
+      );
+      user = { id: result.lastID, name, email, avatar_url: avatarUrl };
+    } else {
+      user = users[0];
+      // Update name or avatar if needed
+      if (user.avatar_url !== avatarUrl || user.name !== name) {
+        await db.run(
+          `UPDATE users SET name = ?, avatar_url = ? WHERE id = ?`,
+          [name, avatarUrl, user.id]
+        );
+        user.name = name;
+        user.avatar_url = avatarUrl;
+      }
+    }
+
+    const token = jwt.sign({ id: user.id, name: user.name, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
+    res.json({ token, user: { id: user.id, name: user.name, email: user.email, avatar_url: user.avatar_url } });
+
+  } catch (err) {
+    console.error('Google verification error:', err);
+    res.status(500).json({ error: 'Internal server error during Google Sign-in verification' });
+  }
+});
 
 // Request Signup OTP
 app.post('/api/auth/signup-otp', async (req, res) => {

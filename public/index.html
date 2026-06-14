@@ -12,6 +12,8 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <!-- Vanilla CSS Stylesheet -->
   <link rel="stylesheet" href="styles.css">
+  <!-- Google Identity Services SDK for Secure Google Sign-in -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 
@@ -27,8 +29,23 @@
         <p>Splitting expenses made easy, clean, and playful!</p>
       </div>
 
+      <!-- Tab Buttons for Auth -->
+      <div class="auth-tabs">
+        <button id="tab-google" class="auth-tab-btn active" onclick="switchAuthTab('google')">Secure Google Sign-In</button>
+        <button id="tab-email" class="auth-tab-btn" onclick="switchAuthTab('email')">Email OTP / Password</button>
+      </div>
+
+      <!-- Google Sign-In Section -->
+      <div id="google-auth-section" class="auth-section">
+        <h3>Secure Google Sign-in</h3>
+        <p class="subtitle" style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 20px;">Log in or create an account instantly using your Google account:</p>
+        <div id="google-signin-button-container" style="display: flex; justify-content: center; min-height: 50px; margin-top: 15px;">
+          <!-- Loaded dynamically -->
+        </div>
+      </div>
+
       <!-- Email Login/Signup Section -->
-      <div id="email-auth-section" class="auth-section">
+      <div id="email-auth-section" class="auth-section hidden">
         <div id="email-initial-form">
           <div class="form-group">
             <label for="auth-email">Email Address</label>
