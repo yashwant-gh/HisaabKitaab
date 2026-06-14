@@ -97,24 +97,33 @@ async function sendExpenseApprovalEmail(email, participantName, payerName, descr
 }
 
 // --- Exchange Rate Helper ---
+// IMPORTANT: Always uses the EXPENSE DATE (not today) for historical accuracy.
+// For a past expense (e.g., paid 8 months ago in USD), the rate from that exact date is fetched.
 async function getExchangeRate(currency, dateStr) {
   if (!currency || currency.toUpperCase() === 'INR') return 1.0;
+
+  // Always use the provided expense date; never silently fall back to today's date
+  // This ensures historical exchange rates are used for past expenses
+  const date = dateStr ? dateStr.split('T')[0] : new Date().toISOString().split('T')[0];
   
-  const date = dateStr || new Date().toISOString().split('T')[0];
   try {
+    // Frankfurter API supports historical dates: https://api.frankfurter.app/YYYY-MM-DD?from=USD&to=INR
     const res = await fetch(`https://api.frankfurter.app/${date}?from=${currency.toUpperCase()}&to=INR`);
     if (res.ok) {
       const data = await res.json();
       if (data.rates && data.rates.INR) {
-        return parseFloat(data.rates.INR);
+        const rate = parseFloat(data.rates.INR);
+        console.log(`[ExchangeRate] ${currency}→INR on ${date}: ${rate} (historical)`);
+        return rate;
       }
     }
   } catch (err) {
     console.warn(`Frankfurter rate fetch failed for ${currency} on ${date}. Trying fallback.`, err);
   }
   
-  // Static Fallbacks
+  // Static Fallbacks (used only if Frankfurter API is unreachable)
   const c = currency.toUpperCase();
+  console.warn(`[ExchangeRate] Using static fallback for ${c} (could not fetch historical rate for ${date})`);
   if (c === 'USD') return 83.5;
   if (c === 'EUR') return 90.0;
   if (c === 'GBP') return 105.0;
@@ -842,16 +851,24 @@ app.post('/api/groups/:groupId/expenses', authenticateToken, async (req, res) =>
       const groupResult = await db.query(`SELECT name FROM groups WHERE id = ?`, [req.params.groupId]);
       const groupName = groupResult.length > 0 ? groupResult[0].name : 'Group';
 
+      // The submitter of the entry is auto-approved (they implicitly endorse it)
+      // The payer is also auto-approved (they know what they paid)
+      // Only OTHER participants (not the submitter and not the payer) need to approve
+      const submitterName = req.user.name;
+
       for (const cs of calculatedSplits) {
         const isPayer = cs.userName.toLowerCase() === paid_by.toLowerCase();
-        const appStatus = isPayer ? 'approved' : 'pending';
+        const isSubmitter = cs.userName.toLowerCase() === submitterName.toLowerCase();
+        // Auto-approve if this participant is either the payer OR the person doing the entry
+        const appStatus = (isPayer || isSubmitter) ? 'approved' : 'pending';
 
         await db.run(
           `INSERT INTO expense_approvals (expense_id, user_name, status) VALUES (?, ?, ?)`,
           [expenseId, cs.userName, appStatus]
         );
 
-        if (!isPayer) {
+        // Only send notification to participants who are NOT the payer and NOT the submitter
+        if (!isPayer && !isSubmitter) {
           const userRecords = await db.query(`SELECT email FROM users WHERE name = ?`, [cs.userName]);
           const email = userRecords.length > 0 ? userRecords[0].email : `${cs.userName.toLowerCase()}@hisaab.com`;
           const shareFormatted = cs.calculated_amount.toFixed(2);
@@ -860,6 +877,20 @@ app.post('/api/groups/:groupId/expenses', authenticateToken, async (req, res) =>
             console.error('Failed to send approval email:', err);
           });
         }
+      }
+
+      // After inserting all approvals, check if all participants are auto-approved
+      // (e.g., submitter == payer and all splits are just them) → mark expense as approved immediately
+      const totalApprovals = await db.query(
+        `SELECT COUNT(*) as count FROM expense_approvals WHERE expense_id = ?`,
+        [expenseId]
+      );
+      const approvedCount = await db.query(
+        `SELECT COUNT(*) as count FROM expense_approvals WHERE expense_id = ? AND status = 'approved'`,
+        [expenseId]
+      );
+      if (totalApprovals[0].count === approvedCount[0].count) {
+        await db.run(`UPDATE expenses SET status = 'approved' WHERE id = ?`, [expenseId]);
       }
     }
 

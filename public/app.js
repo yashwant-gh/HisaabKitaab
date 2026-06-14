@@ -729,7 +729,7 @@ function updatePerspectiveView() {
   
   let subtitleText = '';
   if (activeViewFormat === 'debts') {
-    subtitleText = 'Aisha wants one simple number: “Who pays whom, how much, done.”';
+    subtitleText = 'Simplified view: See exactly who you owe and who owes you — your settlements only.';
   } else if (activeViewFormat === 'audit') {
     subtitleText = 'Rohan requested: “No magic numbers. If the app says I owe, I want to see exactly why.”';
   } else if (activeViewFormat === 'currency') {
@@ -763,18 +763,26 @@ function updatePerspectiveView() {
   const dynContent = document.getElementById('perspective-dynamic-content');
   
   if (activeViewFormat === 'debts') {
-    dynTitle.innerText = "Aisha's View: Cash Minimization Settlements";
+    dynTitle.innerText = "My Settlements: Who I Owe & Who Owes Me";
+    // PRIVACY: Only show settlements that involve the current user.
+    // Other members' debts with each other are hidden.
+    const myPayments = balancesData.payments.filter(pay =>
+      pay.from === currentUser.name || pay.to === currentUser.name
+    );
     let html = '<div class="debt-simplification-list">';
-    if (balancesData.payments.length === 0) {
-      html += '<p>🎉 No outstanding debts! Everyone is settled.</p>';
+    if (myPayments.length === 0) {
+      html += '<p>🎉 You have no outstanding debts! You are fully settled.</p>';
     } else {
-      balancesData.payments.forEach(pay => {
+      myPayments.forEach(pay => {
         const isFromMe = pay.from === currentUser.name;
-        const isToMe = pay.to === currentUser.name;
-        const highlights = isFromMe ? 'color: var(--error-color)' : (isToMe ? 'color: var(--success-color)' : '');
+        const highlights = isFromMe ? 'color: var(--error-color)' : 'color: var(--success-color)';
+        const label = isFromMe
+          ? `You owe <strong>${pay.to}</strong>`
+          : `<strong>${pay.from}</strong> owes you`;
         html += `
           <div class="debt-item">
             <span class="names">${pay.from} ➔ ${pay.to}</span>
+            <span class="debt-label" style="font-size:0.75rem; color:#888; margin-left:8px;">${label}</span>
             <span class="amount" style="${highlights}">₹${pay.amount.toFixed(2)}</span>
           </div>`;
       });
