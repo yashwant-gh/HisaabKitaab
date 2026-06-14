@@ -153,7 +153,12 @@ app.post('/api/auth/signup-otp', async (req, res) => {
     res.json({ message: 'Verification OTP sent to your email successfully!' });
   } catch (err) {
     console.error('Error sending email:', err);
-    res.status(500).json({ error: 'Failed to send verification email. Please verify SMTP settings in .env.' });
+    console.log(`\n==================================================`);
+    console.log(`[SMTP FALLBACK] Verification OTP for ${email} is: ${otp}`);
+    console.log(`==================================================\n`);
+    res.status(500).json({ 
+      error: 'Failed to send verification email. Please check your SMTP credentials in .env. (Backup: Check your terminal console for the verification OTP code so you can log in!)'
+    });
   }
 });
 
