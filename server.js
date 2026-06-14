@@ -317,8 +317,8 @@ app.post('/api/groups', authenticateToken, async (req, res) => {
 
   try {
     const result = await db.run(
-      `INSERT INTO groups (name, description) VALUES (?, ?)`,
-      [name, description || '']
+      `INSERT INTO groups (name, description, created_by) VALUES (?, ?, ?)`,
+      [name, description || '', req.user.name]
     );
     const groupId = result.lastID;
 
@@ -591,6 +591,18 @@ app.delete('/api/groups/:groupId/members/:userName', authenticateToken, async (r
     );
     if (requesterMemberships.length === 0) {
       return res.status(403).json({ error: 'Forbidden: You are not a member of this group' });
+    }
+
+    // Fetch the group to check the creator
+    const groupResult = await db.query(`SELECT created_by FROM groups WHERE id = ?`, [groupId]);
+    if (groupResult.length === 0) {
+      return res.status(404).json({ error: 'Group not found' });
+    }
+    const group = groupResult[0];
+
+    // Check if the requester is the creator of the group
+    if (!group.created_by || group.created_by.toLowerCase() !== req.user.name.toLowerCase()) {
+      return res.status(403).json({ error: 'Forbidden: Only the group creator can remove members.' });
     }
 
     // Delete membership

@@ -7,6 +7,7 @@ let balancesData = null;     // Computed balance, audits, simplified debts
 let expensesList = [];       // Loaded expenses
 let membersList = [];        // Loaded group members
 let currentGroupId = 1;      // Seeded group ID
+let activeGroupCreator = null; // Creator of active group
 let myChart = null;          // ChartJS reference
 let isSettlementForm = false; // Toggle for expense vs settlement creation
 
@@ -610,6 +611,7 @@ async function fetchGroupMembers() {
     const data = await res.json();
     if (res.ok) {
       membersList = data.members;
+      activeGroupCreator = data.created_by;
       populatePayerDropdowns();
       renderMembersGrid();
     }
@@ -1186,16 +1188,18 @@ function renderMembersGrid() {
   const container = document.getElementById('members-list-grid');
   container.innerHTML = '';
   
+  const isCreator = currentUser && activeGroupCreator && currentUser.name.toLowerCase() === activeGroupCreator.toLowerCase();
+  
   membersList.forEach(m => {
     const avatarUrl = `https://api.dicebear.com/7.x/adventurer/svg?seed=${m.user_name}`;
     const leftText = m.left_at ? `Left: ${m.left_at}` : 'Active Member';
     const isMe = currentUser && m.user_name.toLowerCase() === currentUser.name.toLowerCase();
     
-    const removeButton = isMe ? '' : `
+    const removeButton = (isCreator && !isMe) ? `
       <button class="btn btn-danger btn-sm mt-3 w-100" onclick="removeGroupMember('${m.user_name}')">
         Remove Member
       </button>
-    `;
+    ` : '';
 
     container.innerHTML += `
       <div class="member-timeline-card">

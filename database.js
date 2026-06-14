@@ -85,6 +85,7 @@ async function setupSchema() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT,
       description TEXT,
+      created_by TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
     await run(`CREATE TABLE IF NOT EXISTS group_members (
@@ -142,6 +143,7 @@ async function setupSchema() {
       id SERIAL PRIMARY KEY,
       name TEXT,
       description TEXT,
+      created_by TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`);
     await run(`CREATE TABLE IF NOT EXISTS group_members (
@@ -181,6 +183,31 @@ async function setupSchema() {
       status TEXT DEFAULT 'pending',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`);
+  }
+
+  // Safe Column Addition Migration
+  try {
+    await run(`ALTER TABLE groups ADD COLUMN created_by TEXT`);
+  } catch (e) {
+    // Ignore error if column already exists
+  }
+
+  // Backfill Migration for Existing Groups
+  try {
+    const groupsWithNoCreator = await query(`SELECT id FROM groups WHERE created_by IS NULL`);
+    for (const g of groupsWithNoCreator) {
+      const firstMember = await query(
+        `SELECT user_name FROM group_members WHERE group_id = ? ORDER BY id ASC LIMIT 1`,
+        [g.id]
+      );
+      if (firstMember.length > 0) {
+        await run(`UPDATE groups SET created_by = ? WHERE id = ?`, [firstMember[0].user_name, g.id]);
+      } else {
+        await run(`UPDATE groups SET created_by = 'Aisha' WHERE id = ?`, [g.id]);
+      }
+    }
+  } catch (err) {
+    console.error('Error backfilling creator for existing groups:', err);
   }
 }
 
