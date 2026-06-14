@@ -202,6 +202,11 @@ body {
   grid-template-columns: 1fr 1fr;
   gap: 15px;
 }
+.form-row-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 15px;
+}
 
 /* Buttons */
 .btn {

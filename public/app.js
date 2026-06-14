@@ -110,8 +110,8 @@ async function loadGroups() {
         document.getElementById('current-group-name').innerText = 'None';
       }
       
-      // Fetch invitations regardless
-      fetchInvitations();
+      // Fetch notifications (invitations and approvals) regardless
+      fetchNotifications();
     } else {
       console.error('Failed to load groups:', data.error);
     }
@@ -171,47 +171,77 @@ async function createNewGroupSubmit() {
   }
 }
 
-async function fetchInvitations() {
+async function fetchNotifications() {
+  if (!token) return;
   try {
-    const res = await fetch(`${API_BASE}/api/invitations`, {
+    const invitesRes = await fetch(`${API_BASE}/api/invitations`, {
       headers: { 'Authorization': `Bearer ${token}` }
     });
-    const data = await res.json();
-    if (res.ok) {
-      renderInvitations(data);
-    }
+    const invitations = invitesRes.ok ? await invitesRes.json() : [];
+
+    const approvalsRes = await fetch(`${API_BASE}/api/pending-approvals`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const approvals = approvalsRes.ok ? await approvalsRes.json() : [];
+
+    renderNotifications(invitations, approvals);
   } catch (err) {
-    console.error('Failed to fetch invitations:', err);
+    console.error('Failed to fetch notifications:', err);
   }
 }
 
-function renderInvitations(invitations) {
+function renderNotifications(invitations, approvals) {
   const container = document.getElementById('dashboard-notifications-container');
   if (!container) return;
   container.innerHTML = '';
-  
-  if (invitations.length === 0) {
+
+  const hasInvites = invitations && invitations.length > 0;
+  const hasApprovals = approvals && approvals.length > 0;
+
+  if (!hasInvites && !hasApprovals) {
     container.style.display = 'none';
     return;
   }
-  
+
   container.style.display = 'block';
-  invitations.forEach(inv => {
-    container.innerHTML += `
-      <div class="notification-card info animate-slide-in">
-        <div class="notification-content">
-          <span class="notification-emoji">✉️</span>
-          <div>
-            <strong>Group Invitation!</strong><br>
-            <span>${inv.invited_by} invited you to join the group "<strong>${inv.group_name}</strong>".</span>
+
+  if (hasInvites) {
+    invitations.forEach(inv => {
+      container.innerHTML += `
+        <div class="notification-card info animate-slide-in">
+          <div class="notification-content">
+            <span class="notification-emoji">✉️</span>
+            <div>
+              <strong>Group Invitation!</strong><br>
+              <span>${inv.invited_by} invited you to join the group "<strong>${inv.group_name}</strong>".</span>
+            </div>
           </div>
-        </div>
-        <div class="notification-actions">
-          <button class="btn btn-success btn-sm" onclick="respondToInvitation(${inv.id}, 'accept')">Accept</button>
-          <button class="btn btn-danger btn-sm" onclick="respondToInvitation(${inv.id}, 'decline')">Decline</button>
-        </div>
-      </div>`;
-  });
+          <div class="notification-actions">
+            <button class="btn btn-success btn-sm" onclick="respondToInvitation(${inv.id}, 'accept')">Accept</button>
+            <button class="btn btn-danger btn-sm" onclick="respondToInvitation(${inv.id}, 'decline')">Decline</button>
+          </div>
+        </div>`;
+    });
+  }
+
+  if (hasApprovals) {
+    approvals.forEach(appr => {
+      container.innerHTML += `
+        <div class="notification-card info animate-slide-in" style="border-left: 5px solid var(--warning-color);">
+          <div class="notification-content">
+            <span class="notification-emoji">⚖️</span>
+            <div>
+              <strong>Approval Request!</strong><br>
+              <span>${appr.paid_by} logged a <strong>${appr.category || 'General'}</strong> expense "<strong>${appr.description}</strong>" of <strong>${appr.amount} ${appr.currency}</strong> in group "<strong>${appr.group_name}</strong>". Your share is <strong>${appr.calculated_amount.toFixed(2)} ${appr.currency}</strong>.</span>
+            </div>
+          </div>
+          <div class="notification-actions">
+            <button class="btn btn-success btn-sm" onclick="respondToApproval(${appr.approval_id}, 'approve')">Approve</button>
+            <button class="btn btn-danger btn-sm" onclick="respondToApproval(${appr.approval_id}, 'reject')">Decline</button>
+          </div>
+        </div>`;
+    });
+  }
 }
 
 async function respondToInvitation(inviteId, action) {
@@ -236,6 +266,30 @@ async function respondToInvitation(inviteId, action) {
     }
   } catch (err) {
     alert('Error responding to invitation');
+  }
+}
+
+async function respondToApproval(approvalId, action) {
+  try {
+    const res = await fetch(`${API_BASE}/api/approvals/${approvalId}/respond`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({ action })
+    });
+    const data = await res.json();
+    if (res.ok) {
+      alert(data.message);
+      fetchNotifications();
+      refreshData();
+    } else {
+      alert(data.error || 'Failed to respond to approval request');
+    }
+  } catch (err) {
+    console.error(err);
+    alert('Error responding to approval request');
   }
 }
 
@@ -919,6 +973,13 @@ function renderExpensesList() {
     return;
   }
   
+  const categoryIcons = {
+    'Food': '🍔 Food',
+    'Grocery': '🛒 Grocery',
+    'Travel': '✈️ Travel',
+    'Others': '📦 Others'
+  };
+
   expensesList.forEach(exp => {
     const dateFormatted = exp.date;
     const isSettlement = exp.is_settlement === 1;
@@ -927,17 +988,47 @@ function renderExpensesList() {
     
     // Split names list
     const splitNames = exp.splits.map(s => s.user_name).join(', ');
+
+    // Category display
+    const catText = isSettlement ? '🤝 Settlement' : (categoryIcons[exp.category] || `📦 ${exp.category || 'General'}`);
+
+    // Approval status badge
+    let approvalBadge = '';
+    if (exp.status === 'pending') {
+      const approvedList = exp.approvals ? exp.approvals.filter(a => a.status === 'approved').map(a => a.user_name) : [];
+      const pendingList = exp.approvals ? exp.approvals.filter(a => a.status === 'pending').map(a => a.user_name) : [];
+      approvalBadge = `
+        <div class="approval-status-badge pending mt-2" style="font-size:0.75rem; background: #fff8e1; border: 1px solid #ffe082; padding: 4px 8px; border-radius: 8px; color: #b78103; display: inline-block;">
+          ⏳ Pending (${approvedList.length}/${(exp.approvals || []).length} approved)
+          <br><small style="color: #666;">Approved: ${approvedList.join(', ') || 'None'}</small>
+          <br><small style="color: #666;">Pending: ${pendingList.join(', ')}</small>
+        </div>
+      `;
+    } else if (exp.status === 'rejected') {
+      approvalBadge = `
+        <div class="approval-status-badge rejected mt-2" style="font-size:0.75rem; background: #ffe5e5; border: 1px solid #ffcccc; padding: 4px 8px; border-radius: 8px; color: #cc0000; display: inline-block;">
+          ❌ Rejected (Legitimacy declined)
+        </div>
+      `;
+    } else if (exp.status === 'approved' && exp.approvals && exp.approvals.length > 0) {
+      approvalBadge = `
+        <div class="approval-status-badge approved mt-2" style="font-size:0.75rem; background: #e6f9f0; border: 1px solid #b3f0d2; padding: 4px 8px; border-radius: 8px; color: #1e7e4e; display: inline-block;">
+          ✓ Legit (Approved by all)
+        </div>
+      `;
+    }
     
     container.innerHTML += `
       <div class="expense-card-item ${isSettlement ? 'settlement' : ''}">
         <div class="details-left">
-          <h4>${isSettlement ? '🤝 ' : '🛒 '}${exp.description}</h4>
+          <h4>${isSettlement ? '🤝 ' : '🛒 '}${exp.description} <span class="badge badge-secondary" style="font-size: 0.75rem; vertical-align: middle; background: rgba(93, 91, 246, 0.1); color: var(--primary-color); border: 1px solid rgba(93, 91, 246, 0.2); padding: 2px 8px; border-radius: 12px; margin-left: 8px;">${catText}</span></h4>
           <div class="meta">
             <span>Paid by <strong>${exp.paid_by}</strong></span> | 
             <span>Split with: <code>${splitNames}</code></span> | 
             <span>Date: ${dateFormatted}</span>
           </div>
           ${exp.notes ? `<div class="notes mt-1" style="font-size:0.8rem; color:#888;">📝 ${exp.notes}</div>` : ''}
+          ${approvalBadge}
         </div>
         <div class="details-right">
           <div class="amount-box">
@@ -1109,6 +1200,7 @@ async function submitExpense(event) {
   const currency = document.getElementById('form-currency').value;
   const date = document.getElementById('form-date').value;
   const notes = document.getElementById('form-notes').value.trim();
+  const category = isSettlement ? 'Others' : document.getElementById('form-category').value;
   
   let split_type = 'equal';
   let splits = [];
@@ -1155,6 +1247,7 @@ async function submitExpense(event) {
     paid_by,
     amount,
     currency,
+    category,
     split_type: isSettlement ? 'equal' : split_type,
     date,
     notes,

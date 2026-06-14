@@ -108,6 +108,8 @@ async function setupSchema() {
       date DATE,
       notes TEXT,
       is_settlement INTEGER DEFAULT 0,
+      category TEXT,
+      status TEXT DEFAULT 'approved',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE
     )`);
@@ -128,6 +130,13 @@ async function setupSchema() {
       status TEXT DEFAULT 'pending',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE
+    )`);
+    await run(`CREATE TABLE IF NOT EXISTS expense_approvals (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      expense_id INTEGER,
+      user_name TEXT,
+      status TEXT DEFAULT 'pending',
+      FOREIGN KEY (expense_id) REFERENCES expenses(id) ON DELETE CASCADE
     )`);
   } else {
     // Postgres DDL
@@ -165,6 +174,8 @@ async function setupSchema() {
       date DATE,
       notes TEXT,
       is_settlement INTEGER DEFAULT 0,
+      category TEXT,
+      status TEXT DEFAULT 'approved',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`);
     await run(`CREATE TABLE IF NOT EXISTS expense_splits (
@@ -183,13 +194,33 @@ async function setupSchema() {
       status TEXT DEFAULT 'pending',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )`);
+    await run(`CREATE TABLE IF NOT EXISTS expense_approvals (
+      id SERIAL PRIMARY KEY,
+      expense_id INTEGER REFERENCES expenses(id) ON DELETE CASCADE,
+      user_name TEXT,
+      status TEXT DEFAULT 'pending'
+    )`);
   }
 
-  // Safe Column Addition Migration
+  // Safe Column Addition Migration (groups creator)
   try {
     await run(`ALTER TABLE groups ADD COLUMN created_by TEXT`);
   } catch (e) {
     // Ignore error if column already exists
+  }
+
+  // Safe Column Addition Migration (expenses category)
+  try {
+    await run(`ALTER TABLE expenses ADD COLUMN category TEXT`);
+  } catch (e) {
+    // Ignore
+  }
+
+  // Safe Column Addition Migration (expenses status)
+  try {
+    await run(`ALTER TABLE expenses ADD COLUMN status TEXT DEFAULT 'approved'`);
+  } catch (e) {
+    // Ignore
   }
 
   // Backfill Migration for Existing Groups

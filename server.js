@@ -61,6 +61,41 @@ async function sendOTPEmail(email, otp) {
   await transporter.sendMail(mailOptions);
 }
 
+// Helper to send expense approval request email
+async function sendExpenseApprovalEmail(email, participantName, payerName, description, amount, currency, groupName, share) {
+  const mailOptions = {
+    from: `"Hisaab Kitaab" <${process.env.SMTP_USER || 'no-reply@hisaab.com'}>`,
+    to: email,
+    subject: `[Hisaab Kitaab] Approval Required for Expense in group: ${groupName}`,
+    text: `Hello ${participantName},\n\n${payerName} has logged an expense '${description}' of ${amount} ${currency} in your group '${groupName}'.\nYour split share is ${share} ${currency}.\n\nPlease log in to the Hisaab Kitaab web app to approve this entry.\n\nBest regards,\nThe Hisaab Kitaab Team`,
+    html: `
+      <div style="font-family: 'Nunito', sans-serif; padding: 20px; border: 1px solid #edf2f7; border-radius: 12px; max-width: 500px; margin: 0 auto; background-color: #f7fafc;">
+        <h2 style="color: #5d5bf6; font-family: 'Fredoka', sans-serif; text-align: center; margin-bottom: 20px;">⚖️ Expense Approval Request</h2>
+        <p style="font-size: 1rem; color: #2b2d42;">Hello <strong>${participantName}</strong>,</p>
+        <p style="font-size: 1rem; color: #2b2d42;"><strong>${payerName}</strong> has logged a new expense in your group <strong>"${groupName}"</strong>:</p>
+        <div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #edf2f7; margin: 15px 0;">
+          <p style="margin: 5px 0;"><strong>Description:</strong> ${description}</p>
+          <p style="margin: 5px 0;"><strong>Total Amount:</strong> ${amount} ${currency}</p>
+          <p style="margin: 5px 0;"><strong>Your Split Share:</strong> ${share} ${currency}</p>
+        </div>
+        <p style="font-size: 1rem; color: #2b2d42;">Please log in to the web app to approve or reject this entry. It will only be considered legitimate once all participants approve.</p>
+        <hr style="border: 0; border-top: 1px solid #edf2f7; margin: 20px 0;">
+        <p style="font-size: 0.8rem; color: #a0aec0; text-align: center;">Hisaab Kitaab App — Splitting expenses made easy, clean, and playful!</p>
+      </div>
+    `
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+  } catch (err) {
+    console.error(`SMTP error sending approval email to ${email}:`, err);
+    console.log(`\n==================================================`);
+    console.log(`[SMTP FALLBACK] Expense approval email for ${participantName} (${email}):`);
+    console.log(`Payer: ${payerName}, Expense: "${description}", Total: ${amount} ${currency}, Share: ${share} ${currency}`);
+    console.log(`==================================================\n`);
+  }
+}
+
 // --- Exchange Rate Helper ---
 async function getExchangeRate(currency, dateStr) {
   if (!currency || currency.toUpperCase() === 'INR') return 1.0;
@@ -651,10 +686,15 @@ app.get('/api/groups/:groupId/expenses', authenticateToken, async (req, res) => 
     );
 
     const filteredExpenses = [];
-    // Fetch splits for each expense and filter
+    // Fetch splits and approvals for each expense and filter
     for (const exp of expenses) {
       exp.splits = await db.query(
         `SELECT user_name, split_value, calculated_amount, calculated_amount_inr FROM expense_splits WHERE expense_id = ?`,
+        [exp.id]
+      );
+
+      exp.approvals = await db.query(
+        `SELECT user_name, status FROM expense_approvals WHERE expense_id = ?`,
         [exp.id]
       );
       
@@ -701,6 +741,7 @@ app.post('/api/groups/:groupId/expenses', authenticateToken, async (req, res) =>
     date,
     notes,
     is_settlement,
+    category,
     splits // Array of { userName, value }
   } = req.body;
 
@@ -720,10 +761,26 @@ app.post('/api/groups/:groupId/expenses', authenticateToken, async (req, res) =>
     const exchangeRate = await getExchangeRate(currency, date);
     const amountInr = amount * exchangeRate;
 
+    const isSelfExpense = splits.length === 1 && splits[0].userName.toLowerCase() === paid_by.toLowerCase();
+    const status = isSelfExpense ? 'approved' : 'pending';
+
     const result = await db.run(
-      `INSERT INTO expenses (group_id, description, paid_by, amount, currency, exchange_rate, split_type, date, notes, is_settlement)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [req.params.groupId, description, paid_by, amount, currency, exchangeRate, split_type, date, notes || '', is_settlement ? 1 : 0]
+      `INSERT INTO expenses (group_id, description, paid_by, amount, currency, exchange_rate, split_type, date, notes, is_settlement, category, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        req.params.groupId,
+        description,
+        paid_by,
+        amount,
+        currency,
+        exchangeRate,
+        split_type,
+        date,
+        notes || '',
+        is_settlement ? 1 : 0,
+        category || 'Others',
+        status
+      ]
     );
     const expenseId = result.lastID;
 
@@ -780,6 +837,32 @@ app.post('/api/groups/:groupId/expenses', authenticateToken, async (req, res) =>
       );
     }
 
+    // Insert approvals
+    if (status === 'pending') {
+      const groupResult = await db.query(`SELECT name FROM groups WHERE id = ?`, [req.params.groupId]);
+      const groupName = groupResult.length > 0 ? groupResult[0].name : 'Group';
+
+      for (const cs of calculatedSplits) {
+        const isPayer = cs.userName.toLowerCase() === paid_by.toLowerCase();
+        const appStatus = isPayer ? 'approved' : 'pending';
+
+        await db.run(
+          `INSERT INTO expense_approvals (expense_id, user_name, status) VALUES (?, ?, ?)`,
+          [expenseId, cs.userName, appStatus]
+        );
+
+        if (!isPayer) {
+          const userRecords = await db.query(`SELECT email FROM users WHERE name = ?`, [cs.userName]);
+          const email = userRecords.length > 0 ? userRecords[0].email : `${cs.userName.toLowerCase()}@hisaab.com`;
+          const shareFormatted = cs.calculated_amount.toFixed(2);
+          
+          sendExpenseApprovalEmail(email, cs.userName, paid_by, description, amount, currency, groupName, shareFormatted).catch(err => {
+            console.error('Failed to send approval email:', err);
+          });
+        }
+      }
+    }
+
     res.json({ message: 'Expense created successfully', expenseId });
   } catch (err) {
     console.error(err);
@@ -815,7 +898,8 @@ app.get('/api/groups/:groupId/balances', authenticateToken, async (req, res) => 
 
     // 2. Fetch all expenses and splits
     const expenses = await db.query(
-      `SELECT * FROM expenses WHERE group_id = ? ORDER BY date ASC, id ASC`
+      `SELECT * FROM expenses WHERE group_id = ? AND status = 'approved' ORDER BY date ASC, id ASC`,
+      [groupId]
     );
     for (const exp of expenses) {
       exp.splits = await db.query(
@@ -985,6 +1069,81 @@ app.get('/api/groups/:groupId/balances', authenticateToken, async (req, res) => 
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Failed to compute balances' });
+  }
+});
+
+// Get pending expense approvals for logged-in user
+app.get('/api/pending-approvals', authenticateToken, async (req, res) => {
+  try {
+    const pending = await db.query(
+      `SELECT ea.id as approval_id, e.id as expense_id, e.description, e.amount, e.currency, e.paid_by, e.category, g.name as group_name, es.calculated_amount
+       FROM expense_approvals ea
+       JOIN expenses e ON ea.expense_id = e.id
+       JOIN groups g ON e.group_id = g.id
+       JOIN expense_splits es ON e.id = es.expense_id AND es.user_name = ea.user_name
+       WHERE ea.user_name = ? AND ea.status = 'pending'`,
+      [req.user.name]
+    );
+    res.json(pending);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch pending approvals' });
+  }
+});
+
+// Respond to an expense approval request
+app.post('/api/approvals/:approvalId/respond', authenticateToken, async (req, res) => {
+  const { action } = req.body;
+  const { approvalId } = req.params;
+
+  if (action !== 'approve' && action !== 'reject') {
+    return res.status(400).json({ error: 'Action must be approve or reject' });
+  }
+
+  try {
+    const approvals = await db.query(
+      `SELECT * FROM expense_approvals WHERE id = ? AND user_name = ? AND status = 'pending'`,
+      [approvalId, req.user.name]
+    );
+    if (approvals.length === 0) {
+      return res.status(404).json({ error: 'Approval request not found' });
+    }
+
+    const approval = approvals[0];
+    const newStatus = action === 'approve' ? 'approved' : 'rejected';
+
+    await db.run(
+      `UPDATE expense_approvals SET status = ? WHERE id = ?`,
+      [newStatus, approvalId]
+    );
+
+    if (action === 'reject') {
+      await db.run(
+        `UPDATE expenses SET status = 'rejected' WHERE id = ?`,
+        [approval.expense_id]
+      );
+    } else {
+      const totalApprovals = await db.query(
+        `SELECT COUNT(*) as count FROM expense_approvals WHERE expense_id = ?`,
+        [approval.expense_id]
+      );
+      const approvedCount = await db.query(
+        `SELECT COUNT(*) as count FROM expense_approvals WHERE expense_id = ? AND status = 'approved'`,
+        [approval.expense_id]
+      );
+
+      if (totalApprovals[0].count === approvedCount[0].count) {
+        await db.run(
+          `UPDATE expenses SET status = 'approved' WHERE id = ?`,
+          [approval.expense_id]
+        );
+      }
+    }
+
+    res.json({ message: `Expense request successfully ${newStatus}.` });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to process approval response' });
   }
 });
 

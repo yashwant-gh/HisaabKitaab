@@ -294,7 +294,7 @@
                 </div>
               </div>
 
-              <div class="form-row-2">
+              <div class="form-row-3">
                 <div class="form-group">
                   <label for="form-amount">Amount</label>
                   <input type="number" id="form-amount" step="0.01" placeholder="0.00" required>
@@ -309,6 +309,16 @@
                     <option value="GBP">GBP (£)</option>
                   </select>
                 </div>
+
+                <div class="form-group">
+                  <label for="form-category">Category</label>
+                  <select id="form-category">
+                    <option value="Food">Food 🍔</option>
+                    <option value="Grocery">Grocery 🛒</option>
+                    <option value="Travel">Travel ✈️</option>
+                    <option value="Others">Others 📦</option>
+                  </select>
+                </div>
               </div>
 
               <div id="exchange-rate-preview" class="exchange-preview hidden">
@@ -321,8 +331,6 @@
                   <label for="form-split-type">Split Logic</label>
                   <select id="form-split-type" onchange="adjustSplitInputs()">
                     <option value="equal">Split Equally</option>
-                    <option value="unequal">Split Unequally (Exact Amounts)</option>
-                    <option value="share">Split by Shares (Ratios)</option>
                     <option value="percentage">Split by Percentages (%)</option>
                   </select>
                 </div>
