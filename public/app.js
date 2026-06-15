@@ -964,9 +964,9 @@ function renderChart() {
 
   // Build a gradient fill for the line chart
   const gradient = ctx.createLinearGradient(0, 0, 0, 260);
-  gradient.addColorStop(0, 'rgba(93, 91, 246, 0.35)');
-  gradient.addColorStop(0.6, 'rgba(93, 91, 246, 0.08)');
-  gradient.addColorStop(1, 'rgba(93, 91, 246, 0.0)');
+  gradient.addColorStop(0, 'rgba(5, 44, 40, 0.25)');
+  gradient.addColorStop(0.6, 'rgba(5, 44, 40, 0.05)');
+  gradient.addColorStop(1, 'rgba(5, 44, 40, 0.0)');
 
   myChart = new Chart(ctx, {
     type: 'line',
@@ -975,17 +975,17 @@ function renderChart() {
       datasets: [{
         label: 'My Share (₹)',
         data,
-        borderColor: '#5d5bf6',
+        borderColor: '#052c28',
         borderWidth: 2.5,
         backgroundColor: gradient,
         fill: true,
-        tension: 0.45,           // smooth bezier curves like Apple Finance
+        tension: 0.45,
         pointRadius: 4,
         pointHoverRadius: 8,
         pointBackgroundColor: '#ffffff',
-        pointBorderColor: '#5d5bf6',
+        pointBorderColor: '#052c28',
         pointBorderWidth: 2.5,
-        pointHoverBackgroundColor: '#5d5bf6',
+        pointHoverBackgroundColor: '#052c28',
         pointHoverBorderColor: '#ffffff',
         pointHoverBorderWidth: 2
       }]
@@ -998,14 +998,14 @@ function renderChart() {
         legend: { display: false },
         tooltip: {
           backgroundColor: 'rgba(255,255,255,0.97)',
-          titleColor: '#2b2d42',
-          bodyColor: '#5d5bf6',
-          borderColor: 'rgba(93,91,246,0.25)',
+          titleColor: '#052c28',
+          bodyColor: '#052c28',
+          borderColor: 'rgba(5,44,40,0.15)',
           borderWidth: 1,
           cornerRadius: 12,
           padding: 12,
-          titleFont: { family: 'Fredoka', size: 13, weight: 'bold' },
-          bodyFont: { family: 'Nunito', size: 14, weight: 'bold' },
+          titleFont: { family: 'Outfit', size: 13, weight: 'bold' },
+          bodyFont: { family: 'Plus Jakarta Sans', size: 14, weight: 'bold' },
           callbacks: {
             label: (ctx) => `  ₹${ctx.parsed.y.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
           }
@@ -1014,17 +1014,17 @@ function renderChart() {
       scales: {
         y: {
           beginAtZero: true,
-          grid: { color: 'rgba(0,0,0,0.05)', drawBorder: false },
+          grid: { color: 'rgba(0,0,0,0.04)', drawBorder: false },
           ticks: {
-            font: { family: 'Nunito', size: 11 },
-            color: '#a0aec0',
+            font: { family: 'Plus Jakarta Sans', size: 11 },
+            color: '#94a3b8',
             callback: v => '₹' + (v >= 1000 ? (v/1000).toFixed(1) + 'k' : v)
           },
           border: { display: false }
         },
         x: {
           grid: { display: false },
-          ticks: { font: { family: 'Nunito', size: 11, weight: '600' }, color: '#718096' },
+          ticks: { font: { family: 'Plus Jakarta Sans', size: 11, weight: '600' }, color: '#64748b' },
           border: { display: false }
         }
       },
