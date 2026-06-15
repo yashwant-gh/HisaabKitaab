@@ -1,4 +1,4 @@
-# 🪙 HisaabKitaab (हिساب-किताब)
+# 🪙 HisaabKitaab (हिसाब-किताब)
 
 > A smart, secure, and beautiful expense-splitting & group settlement application featuring real-time exchange rates, consensus approvals, and an interactive CSV anomaly resolution wizard.
 
