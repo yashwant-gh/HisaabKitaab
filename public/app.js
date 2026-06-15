@@ -1947,6 +1947,49 @@ async function executeFinalImport() {
     });
   }
 
+  // Compile anomaly resolution report
+  const anomalyReport = importIssues.map(issue => {
+    let action = 'Unknown';
+    try {
+      if (issue.type === 'duplicate') {
+        const el = document.querySelector(`input[name="res_${issue.id}"]:checked`);
+        action = el ? (el.value === 'keep_first' ? 'Keep first, discard duplicates' : el.value === 'keep_second' ? 'Keep second, discard duplicates' : 'Keep both') : 'No action selected';
+      } else if (issue.type === 'conflict') {
+        const el = document.querySelector(`input[name="res_${issue.id}"]:checked`);
+        action = el ? (el.value === 'keep_row_0' ? "Keep Aisha's log" : el.value === 'keep_row_1' ? "Keep Rohan's log" : 'Keep both') : 'No action selected';
+      } else if (issue.type === 'missing_payer') {
+        const el = document.getElementById(`payer_select_${issue.id}`);
+        action = el ? `Set payer to ${el.value}` : 'No action selected';
+      } else if (issue.type === 'missing_currency') {
+        const el = document.getElementById(`currency_select_${issue.id}`);
+        action = el ? `Set currency to ${el.value}` : 'No action selected';
+      } else if (issue.type === 'settlement_detected') {
+        const el = document.querySelector(`input[name="res_${issue.id}"]:checked`);
+        action = el ? (el.value === 'convert_settlement' ? 'Convert to direct settlement' : 'Keep as split expense') : 'No action selected';
+      } else if (issue.type === 'invalid_percentage') {
+        const el = document.querySelector(`input[name="res_${issue.id}"]:checked`);
+        action = el ? (el.value === 'normalize' ? 'Normalize percentages to 100%' : 'Keep raw percentages') : 'No action selected';
+      } else if (issue.type === 'ambiguous_date') {
+        const el = document.querySelector(`input[name="res_${issue.id}"]:checked`);
+        action = el ? `Set date to ${el.value}` : 'No action selected';
+      } else if (issue.type === 'membership_violation') {
+        const el = document.querySelector(`input[name="res_${issue.id}"]:checked`);
+        action = el ? (el.value === 'remove_member' ? 'Remove Meera from split' : 'Force split with Meera anyway') : 'No action selected';
+      } else if (issue.type === 'missing_member') {
+        const el = document.querySelector(`input[name="res_${issue.id}"]:checked`);
+        action = el ? (el.value === 'add_to_group' ? 'Automatically add user to group' : 'Skip adding') : 'No action selected';
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return {
+      id: issue.id,
+      type: issue.type,
+      message: issue.message,
+      actionTaken: action
+    };
+  });
+
   // Submit finalized records to database
   try {
     const res = await fetch(`${API_BASE}/api/import/confirm`, {
@@ -1957,7 +2000,8 @@ async function executeFinalImport() {
       },
       body: JSON.stringify({
         groupId: currentGroupId,
-        expenses: finalizedExpenses
+        expenses: finalizedExpenses,
+        report: anomalyReport
       })
     });
     const data = await res.json();

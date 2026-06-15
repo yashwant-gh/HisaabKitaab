@@ -1215,7 +1215,7 @@ app.post('/api/import/analyze', upload.single('file'), async (req, res) => {
 
 // Import Final Checked / Cleaned CSV rows
 app.post('/api/import/confirm', authenticateToken, async (req, res) => {
-  const { groupId, expenses } = req.body;
+  const { groupId, expenses, report } = req.body;
   if (!groupId || !expenses || !Array.isArray(expenses)) {
     return res.status(400).json({ error: 'groupId and expenses list are required' });
   }
@@ -1270,6 +1270,25 @@ app.post('/api/import/confirm', authenticateToken, async (req, res) => {
     }
 
     await db.run('COMMIT');
+
+    // Generate import report on disk
+    if (report && Array.isArray(report)) {
+      let reportMd = `# HisaabKitaab CSV Import Report\n\n`;
+      reportMd += `- **Generated On**: ${new Date().toLocaleString()}\n`;
+      reportMd += `- **Target Group ID**: ${groupId}\n`;
+      reportMd += `- **Total Expenses Successfully Cleaned & Imported**: ${expenses.length}\n\n`;
+      reportMd += `## Anomalies Resolved\n\n`;
+      reportMd += `| Anomaly ID | Type | Description | Action Taken |\n`;
+      reportMd += `| :--- | :--- | :--- | :--- |\n`;
+      report.forEach(item => {
+        reportMd += `| \`${item.id}\` | **${item.type}** | ${item.message} | \`${item.actionTaken}\` |\n`;
+      });
+      
+      const reportPath = path.resolve(__dirname, 'import_report.md');
+      fs.writeFileSync(reportPath, reportMd, 'utf8');
+      console.log('Import report produced successfully at:', reportPath);
+    }
+
     res.json({ message: `Successfully imported ${expenses.length} clean expenses!` });
   } catch (err) {
     await db.run('ROLLBACK');
