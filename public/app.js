@@ -1755,11 +1755,18 @@ function renderImportWizard() {
 
 // Compute final cleaned row list and hit backend import endpoint
 async function executeFinalImport() {
+  // Safe helper to fetch checked radio value without throwing DOMExceptions on spaces/quotes
+  const getCheckedRadioValue = (name) => {
+    const elements = document.getElementsByName(name);
+    const checked = Array.from(elements).find(el => el.checked);
+    return checked ? checked.value : '';
+  };
+
   // Handle adding missing members first
   for (const issue of importIssues) {
     if (issue.type === 'missing_member') {
-      const checkedElement = document.querySelector(`input[name="res_${issue.id}"]:checked`);
-      if (checkedElement && checkedElement.value === 'add_to_group') {
+      const choice = getCheckedRadioValue(`res_${issue.id}`);
+      if (choice === 'add_to_group') {
         try {
           await fetch(`${API_BASE}/api/groups/${currentGroupId}/members`, {
             method: 'POST',
@@ -1786,14 +1793,14 @@ async function executeFinalImport() {
   // First, resolve conflict options and duplicates to filter raw rows
   importIssues.forEach(issue => {
     if (issue.type === 'duplicate') {
-      const choice = document.querySelector(`input[name="res_${issue.id}"]:checked`).value;
+      const choice = getCheckedRadioValue(`res_${issue.id}`);
       if (choice === 'keep_first') {
         excludedIndices.add(issue.rows[1].csvIndex);
       } else if (choice === 'keep_second') {
         excludedIndices.add(issue.rows[0].csvIndex);
       }
     } else if (issue.type === 'conflict') {
-      const choice = document.querySelector(`input[name="res_${issue.id}"]:checked`).value;
+      const choice = getCheckedRadioValue(`res_${issue.id}`);
       if (choice === 'keep_row_0') {
         excludedIndices.add(issue.rows[1].csvIndex);
       } else if (choice === 'keep_row_1') {
@@ -1836,7 +1843,7 @@ async function executeFinalImport() {
     const settlementIssue = importIssues.find(iss => iss.type === 'settlement_detected' && iss.row.csvIndex === i);
     let isSettlement = false;
     if (settlementIssue) {
-      const choice = document.querySelector(`input[name="res_${settlementIssue.id}"]:checked`).value;
+      const choice = getCheckedRadioValue(`res_${settlementIssue.id}`);
       if (choice === 'convert_settlement') {
         isSettlement = true;
       }
@@ -1847,13 +1854,13 @@ async function executeFinalImport() {
     // Fix 4: Ambiguous Date
     const dateIssue = importIssues.find(iss => iss.type === 'ambiguous_date' && iss.row.csvIndex === i);
     if (dateIssue) {
-      row.date = document.querySelector(`input[name="res_${dateIssue.id}"]:checked`).value;
+      row.date = getCheckedRadioValue(`res_${dateIssue.id}`);
     }
 
     // Fix 5: Meera Membership violation
     const membershipIssue = importIssues.find(iss => iss.type === 'membership_violation' && iss.row.csvIndex === i);
     if (membershipIssue) {
-      const choice = document.querySelector(`input[name="res_${membershipIssue.id}"]:checked`).value;
+      const choice = getCheckedRadioValue(`res_${membershipIssue.id}`);
       if (choice === 'remove_member') {
         row.splitWith = row.splitWith.filter(name => name !== 'Meera');
         if (row.splitDetails && row.splitDetails['Meera']) {
@@ -1865,7 +1872,7 @@ async function executeFinalImport() {
     // Fix 6: Normalizing percentage splits
     const percentageIssue = importIssues.find(iss => iss.type === 'invalid_percentage' && iss.row.csvIndex === i);
     if (percentageIssue && row.splitType === 'percentage') {
-      const choice = document.querySelector(`input[name="res_${percentageIssue.id}"]:checked`).value;
+      const choice = getCheckedRadioValue(`res_${percentageIssue.id}`);
       if (choice === 'normalize') {
         const totalPct = Object.values(row.splitDetails).reduce((a, b) => a + b, 0);
         const normalized = {};
@@ -1952,11 +1959,11 @@ async function executeFinalImport() {
     let action = 'Unknown';
     try {
       if (issue.type === 'duplicate') {
-        const el = document.querySelector(`input[name="res_${issue.id}"]:checked`);
-        action = el ? (el.value === 'keep_first' ? 'Keep first, discard duplicates' : el.value === 'keep_second' ? 'Keep second, discard duplicates' : 'Keep both') : 'No action selected';
+        const val = getCheckedRadioValue(`res_${issue.id}`);
+        action = val ? (val === 'keep_first' ? 'Keep first, discard duplicates' : val === 'keep_second' ? 'Keep second, discard duplicates' : 'Keep both') : 'No action selected';
       } else if (issue.type === 'conflict') {
-        const el = document.querySelector(`input[name="res_${issue.id}"]:checked`);
-        action = el ? (el.value === 'keep_row_0' ? "Keep Aisha's log" : el.value === 'keep_row_1' ? "Keep Rohan's log" : 'Keep both') : 'No action selected';
+        const val = getCheckedRadioValue(`res_${issue.id}`);
+        action = val ? (val === 'keep_row_0' ? "Keep first log" : val === 'keep_row_1' ? "Keep second log" : 'Keep both') : 'No action selected';
       } else if (issue.type === 'missing_payer') {
         const el = document.getElementById(`payer_select_${issue.id}`);
         action = el ? `Set payer to ${el.value}` : 'No action selected';
@@ -1964,20 +1971,20 @@ async function executeFinalImport() {
         const el = document.getElementById(`currency_select_${issue.id}`);
         action = el ? `Set currency to ${el.value}` : 'No action selected';
       } else if (issue.type === 'settlement_detected') {
-        const el = document.querySelector(`input[name="res_${issue.id}"]:checked`);
-        action = el ? (el.value === 'convert_settlement' ? 'Convert to direct settlement' : 'Keep as split expense') : 'No action selected';
+        const val = getCheckedRadioValue(`res_${issue.id}`);
+        action = val ? (val === 'convert_settlement' ? 'Convert to direct settlement' : 'Keep as split expense') : 'No action selected';
       } else if (issue.type === 'invalid_percentage') {
-        const el = document.querySelector(`input[name="res_${issue.id}"]:checked`);
-        action = el ? (el.value === 'normalize' ? 'Normalize percentages to 100%' : 'Keep raw percentages') : 'No action selected';
+        const val = getCheckedRadioValue(`res_${issue.id}`);
+        action = val ? (val === 'normalize' ? 'Normalize percentages to 100%' : 'Keep raw percentages') : 'No action selected';
       } else if (issue.type === 'ambiguous_date') {
-        const el = document.querySelector(`input[name="res_${issue.id}"]:checked`);
-        action = el ? `Set date to ${el.value}` : 'No action selected';
+        const val = getCheckedRadioValue(`res_${issue.id}`);
+        action = val ? `Set date to ${val}` : 'No action selected';
       } else if (issue.type === 'membership_violation') {
-        const el = document.querySelector(`input[name="res_${issue.id}"]:checked`);
-        action = el ? (el.value === 'remove_member' ? 'Remove Meera from split' : 'Force split with Meera anyway') : 'No action selected';
+        const val = getCheckedRadioValue(`res_${issue.id}`);
+        action = val ? (val === 'remove_member' ? 'Remove from split' : 'Force split anyway') : 'No action selected';
       } else if (issue.type === 'missing_member') {
-        const el = document.querySelector(`input[name="res_${issue.id}"]:checked`);
-        action = el ? (el.value === 'add_to_group' ? 'Automatically add user to group' : 'Skip adding') : 'No action selected';
+        const val = getCheckedRadioValue(`res_${issue.id}`);
+        action = val ? (val === 'add_to_group' ? 'Automatically add user to group' : 'Skip adding') : 'No action selected';
       }
     } catch (e) {
       console.error(e);

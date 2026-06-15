@@ -28,12 +28,20 @@ function parseDate(dateStr) {
     return `2026-03-${day.padStart(2, '0')}`;
   }
 
-  // E.g., "01-02-2026" or "04-05-2026"
-  const dmy = str.split('-');
-  if (dmy.length === 3) {
-    let day = dmy[0].padStart(2, '0');
-    let month = dmy[1].padStart(2, '0');
-    let year = dmy[2];
+  // E.g., "01-02-2026", "04-05-2026", or "2025-01-02"
+  const parts = str.split('-');
+  if (parts.length === 3) {
+    if (parts[0].length === 4) {
+      // It is already YYYY-MM-DD
+      const year = parts[0];
+      const month = parts[1].padStart(2, '0');
+      const day = parts[2].padStart(2, '0');
+      return `${year}-${month}-${day}`;
+    }
+    // Otherwise it is DD-MM-YYYY or DD-MM-YY
+    let day = parts[0].padStart(2, '0');
+    let month = parts[1].padStart(2, '0');
+    let year = parts[2];
     if (year.length === 2) year = '20' + year;
     return `${year}-${month}-${day}`;
   }
